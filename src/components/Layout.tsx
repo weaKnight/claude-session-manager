@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  FolderTree, Search, Shield, BarChart3, LogOut,
+  FolderTree, Search, Shield, BarChart3, Trash2, LogOut,
   Sun, Moon, ChevronLeft, Menu, Wifi, WifiOff,
 } from 'lucide-react';
 import { projects as projectsApi, type ProjectInfo, type SessionMeta } from '../utils/api';
@@ -17,8 +17,9 @@ import SessionList from './SessionList';
 import ChatViewer from './ChatViewer';
 import SearchPanel from './SearchPanel';
 import AuditPanel from './AuditPanel';
+import TrashPanel from './TrashPanel';
 
-type View = 'projects' | 'search' | 'audit' | 'stats';
+type View = 'projects' | 'search' | 'audit' | 'trash' | 'stats';
 
 interface LayoutProps {
   onLogout: () => void;
@@ -95,6 +96,7 @@ export default function Layout({ onLogout }: LayoutProps) {
     { id: 'projects', icon: <FolderTree size={18} />, label: t('nav.projects') },
     { id: 'search', icon: <Search size={18} />, label: t('nav.search') },
     { id: 'audit', icon: <Shield size={18} />, label: t('nav.audit') },
+    { id: 'trash', icon: <Trash2 size={18} />, label: t('trash.title') },
     { id: 'stats', icon: <BarChart3 size={18} />, label: t('nav.stats') },
   ];
 
@@ -227,6 +229,9 @@ export default function Layout({ onLogout }: LayoutProps) {
             <div className="flex items-center justify-center h-full" style={{ color: 'var(--txt-3)' }}>
               <p className="text-sm">{t('sessions.no_sessions')}</p>
             </div>
+          )}
+          {view === 'trash' && (
+            <TrashPanel />
           )}
           {view === 'stats' && (
             <div className="p-6">

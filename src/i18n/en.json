@@ -79,6 +79,14 @@
     "total_sessions": "Total Sessions",
     "total_messages": "Total Messages"
   },
+  "trash": {
+    "title": "Trash",
+    "no_items": "Trash is empty.",
+    "restore": "Restore",
+    "empty": "Empty Trash",
+    "empty_confirm": "Permanently delete all items in trash? This cannot be undone.",
+    "restored": "Session restored"
+  },
   "common": {
     "loading": "Loading...",
     "error": "Something went wrong",

@@ -193,6 +193,29 @@ export const search = {
   },
 };
 
+export interface TrashItem {
+  fileName: string;
+  projectId: string;
+  sessionId: string;
+  deletedAt: number;
+  fileSize: number;
+}
+
+export const trash = {
+  list: () => request<{ items: TrashItem[] }>('/trash'),
+
+  restore: (fileName: string) =>
+    request<{ success: boolean }>('/trash/restore', {
+      method: 'POST',
+      body: JSON.stringify({ fileName }),
+    }),
+
+  empty: () =>
+    request<{ success: boolean; deleted: number }>('/trash', {
+      method: 'DELETE',
+    }),
+};
+
 export const stats = {
   get: () => request<Record<string, unknown>>('/stats'),
 };

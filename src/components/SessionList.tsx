@@ -84,7 +84,7 @@ export default function SessionList({ sessions, projectId, onSelect, onRefresh }
           <div
             key={session.id}
             onClick={() => onSelect(projectId, session.id)}
-            className="card p-4 cursor-pointer transition-all hover:translate-x-0.5"
+            className="group card p-4 cursor-pointer transition-all hover:translate-x-0.5"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">

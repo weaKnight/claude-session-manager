@@ -11,6 +11,9 @@ import {
   softDeleteSession,
   hardDeleteSession,
   getStats,
+  listTrash,
+  restoreSession,
+  emptyTrash,
 } from '../services/session-manager.js';
 
 const router = Router();
@@ -71,6 +74,41 @@ router.delete('/sessions/:projectId/:sessionId', (req, res) => {
 
   if (result.success) {
     res.json({ success: true, method: force === 'true' ? 'hard' : 'soft' });
+  } else {
+    res.status(400).json({ error: result.error });
+  }
+});
+
+// GET /api/v1/trash - List trash items / 列出回收站条目
+router.get('/trash', (_req, res) => {
+  try {
+    const items = listTrash();
+    res.json({ items });
+  } catch (err) {
+    res.status(500).json({ error: `Failed to list trash: ${err}` });
+  }
+});
+
+// POST /api/v1/trash/restore - Restore from trash / 从回收站恢复
+router.post('/trash/restore', (req, res) => {
+  const { fileName } = req.body as { fileName?: string };
+  if (!fileName) {
+    res.status(400).json({ error: 'fileName is required / 缺少 fileName 参数' });
+    return;
+  }
+  const result = restoreSession(fileName);
+  if (result.success) {
+    res.json({ success: true });
+  } else {
+    res.status(400).json({ error: result.error });
+  }
+});
+
+// DELETE /api/v1/trash - Empty trash / 清空回收站
+router.delete('/trash', (_req, res) => {
+  const result = emptyTrash();
+  if (result.success) {
+    res.json({ success: true, deleted: result.deleted });
   } else {
     res.status(400).json({ error: result.error });
   }

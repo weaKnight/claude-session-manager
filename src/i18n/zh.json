@@ -79,6 +79,14 @@
     "total_sessions": "会话总数",
     "total_messages": "消息总数"
   },
+  "trash": {
+    "title": "回收站",
+    "no_items": "回收站为空。",
+    "restore": "恢复",
+    "empty": "清空回收站",
+    "empty_confirm": "永久删除回收站中的所有条目？此操作不可撤销。",
+    "restored": "会话已恢复"
+  },
   "common": {
     "loading": "加载中...",
     "error": "出错了",

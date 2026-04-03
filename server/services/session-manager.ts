@@ -208,6 +208,120 @@ export function hardDeleteSession(projectId: string, sessionId: string): { succe
 }
 
 /**
+ * Trash item info / 回收站条目信息
+ */
+export interface TrashItem {
+  fileName: string;
+  projectId: string;
+  sessionId: string;
+  deletedAt: number;
+  fileSize: number;
+}
+
+/**
+ * List all items in trash / 列出回收站中的所有条目
+ */
+export function listTrash(): TrashItem[] {
+  if (!existsSync(config.trashDir)) return [];
+
+  const files = readdirSync(config.trashDir).filter((f) => f.endsWith('.jsonl'));
+  const items: TrashItem[] = [];
+
+  for (const file of files) {
+    // Format: {projectId}__{sessionId}__{timestamp}.jsonl
+    // 格式：{projectId}__{sessionId}__{timestamp}.jsonl
+    const match = file.match(/^(.+?)__(.+?)__(\d+)\.jsonl$/);
+    if (!match) continue;
+
+    const [, projectId, sessionId, ts] = match;
+    try {
+      const stat = statSync(join(config.trashDir, file));
+      items.push({
+        fileName: file,
+        projectId,
+        sessionId,
+        deletedAt: Number(ts),
+        fileSize: stat.size,
+      });
+    } catch { /* skip */ }
+  }
+
+  // Sort by most recently deleted / 按删除时间倒序
+  items.sort((a, b) => b.deletedAt - a.deletedAt);
+  return items;
+}
+
+/**
+ * Restore a session from trash / 从回收站恢复会话
+ */
+export function restoreSession(fileName: string): { success: boolean; error?: string } {
+  if (config.readOnly) {
+    return { success: false, error: 'Read-only mode / 只读模式' };
+  }
+
+  // Validate filename format / 验证文件名格式
+  const match = fileName.match(/^(.+?)__(.+?)__(\d+)\.jsonl$/);
+  if (!match) {
+    return { success: false, error: 'Invalid trash item / 无效的回收站条目' };
+  }
+
+  const [, projectId, sessionId] = match;
+  if (!isValidId(projectId) || !isValidId(sessionId)) {
+    return { success: false, error: 'Invalid ID / 无效 ID' };
+  }
+
+  const trashPath = join(config.trashDir, fileName);
+  if (!existsSync(trashPath)) {
+    return { success: false, error: 'Trash item not found / 回收站条目不存在' };
+  }
+
+  const projectDir = join(getProjectsDir(), projectId);
+  const targetPath = join(projectDir, `${sessionId}.jsonl`);
+
+  // Check if session already exists at target / 检查目标位置是否已存在
+  if (existsSync(targetPath)) {
+    return { success: false, error: 'Session already exists at target / 目标位置已存在该会话' };
+  }
+
+  try {
+    renameSync(trashPath, targetPath);
+    logger.info(`Session restored: ${sessionId} <- trash`);
+    return { success: true };
+  } catch (err) {
+    logger.error(`Failed to restore session: ${err}`);
+    return { success: false, error: 'Restore failed / 恢复失败' };
+  }
+}
+
+/**
+ * Empty entire trash / 清空回收站
+ */
+export function emptyTrash(): { success: boolean; deleted: number; error?: string } {
+  if (config.readOnly) {
+    return { success: false, deleted: 0, error: 'Read-only mode / 只读模式' };
+  }
+
+  if (!existsSync(config.trashDir)) {
+    return { success: true, deleted: 0 };
+  }
+
+  const files = readdirSync(config.trashDir).filter((f) => f.endsWith('.jsonl'));
+  let deleted = 0;
+
+  for (const file of files) {
+    try {
+      unlinkSync(join(config.trashDir, file));
+      deleted++;
+    } catch (err) {
+      logger.error(`Failed to delete trash item ${file}: ${err}`);
+    }
+  }
+
+  logger.info(`Trash emptied: ${deleted} items`);
+  return { success: true, deleted };
+}
+
+/**
  * Invalidate cache for a project (called on file change)
  * 使项目缓存失效（文件变更时调用）
  */
