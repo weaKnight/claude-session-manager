@@ -1,5 +1,7 @@
 # Claude Session Manager
 
+[中文文档](README.zh-CN.md)
+
 A lightweight, self-hosted web tool for browsing, searching, and auditing [Claude Code](https://docs.anthropic.com/en/docs/claude-code) conversation history. Designed for **headless Linux servers** with no desktop environment required.
 
 ## Why This Tool?
