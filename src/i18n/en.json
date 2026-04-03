@@ -1,0 +1,93 @@
+{
+  "app": {
+    "title": "Claude Session Manager",
+    "subtitle": "Conversation History & Audit"
+  },
+  "auth": {
+    "login": "Sign In",
+    "logout": "Sign Out",
+    "password": "Password",
+    "setup_title": "Set Up Password",
+    "setup_desc": "Create a password to protect access to your Claude Code session history.",
+    "setup_btn": "Create Password",
+    "login_title": "Welcome Back",
+    "login_desc": "Enter your password to access session history.",
+    "login_btn": "Sign In",
+    "password_min": "At least 8 characters",
+    "locked": "Account locked. Try again later.",
+    "invalid": "Invalid password"
+  },
+  "nav": {
+    "projects": "Projects",
+    "search": "Search",
+    "audit": "Audit",
+    "stats": "Statistics",
+    "settings": "Settings"
+  },
+  "projects": {
+    "title": "Projects",
+    "sessions": "sessions",
+    "no_projects": "No Claude Code projects found.",
+    "last_active": "Last active"
+  },
+  "sessions": {
+    "title": "Sessions",
+    "messages": "messages",
+    "tokens": "tokens",
+    "branch": "Branch",
+    "no_sessions": "No sessions in this project.",
+    "delete": "Delete",
+    "delete_confirm": "Delete this session? It will be moved to trash.",
+    "delete_hard_confirm": "Permanently delete? This cannot be undone.",
+    "deleted": "Session deleted",
+    "view_commands": "View Commands",
+    "agent_session": "Sub-agent"
+  },
+  "chat": {
+    "user": "You",
+    "assistant": "Claude",
+    "system": "System",
+    "tool_use": "Tool",
+    "tool_result": "Result",
+    "error": "Error",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "no_messages": "No messages in this session.",
+    "tokens_used": "Tokens used"
+  },
+  "search": {
+    "placeholder": "Search messages, projects...",
+    "no_results": "No results found.",
+    "results_count": "{{count}} results",
+    "filter_project": "Filter by project",
+    "filter_date": "Filter by date"
+  },
+  "audit": {
+    "title": "Command Audit",
+    "tool_name": "Tool",
+    "command": "Command",
+    "status": "Status",
+    "success": "Success",
+    "error": "Error",
+    "timestamp": "Time",
+    "no_commands": "No commands in this session.",
+    "filter_tool": "Filter by tool"
+  },
+  "stats": {
+    "title": "Usage Statistics",
+    "total_projects": "Total Projects",
+    "total_sessions": "Total Sessions",
+    "total_messages": "Total Messages"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "retry": "Retry",
+    "close": "Close",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "dark_mode": "Dark Mode",
+    "light_mode": "Light Mode",
+    "language": "Language"
+  }
+}

@@ -1,0 +1,33 @@
+# Docker Compose for Claude Session Manager
+# Claude 会话管理器 Docker Compose 配置
+#
+# Usage / 使用:
+#   docker compose up -d
+#
+# The ~/.claude directory is mounted read-only for security.
+# ~/.claude 目录以只读方式挂载，确保安全
+
+services:
+  csm:
+    build: .
+    container_name: claude-session-manager
+    restart: unless-stopped
+    ports:
+      - "3727:3727"
+    volumes:
+      # Mount Claude data as read-only / 只读挂载 Claude 数据
+      - ${HOME}/.claude:/home/csm/.claude:ro
+      # Persist app config (auth, trash) / 持久化应用配置
+      - csm-data:/home/csm/.claude-session-manager
+    environment:
+      - CSM_PORT=3727
+      - CSM_HOST=0.0.0.0
+      - CSM_CLAUDE_DIR=/home/csm/.claude
+      # Set a strong secret for JWT signing / 设置强 JWT 签名密钥
+      - CSM_SECRET=${CSM_SECRET:-}
+      # Optional: read-only mode / 可选：只读模式
+      # - CSM_READ_ONLY=true
+
+volumes:
+  csm-data:
+    driver: local

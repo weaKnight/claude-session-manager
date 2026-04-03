@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.env
+.DS_Store
+*.local
+
+# App data (contains password hash)
+# 应用数据（包含密码哈希）
+.claude-session-manager/

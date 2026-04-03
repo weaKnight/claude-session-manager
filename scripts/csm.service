@@ -1,0 +1,46 @@
+# systemd service for Claude Session Manager
+# Claude 会话管理器 systemd 服务
+#
+# Installation / 安装:
+#   sudo cp scripts/csm.service /etc/systemd/system/
+#   sudo systemctl edit --full csm.service   # Edit User= and paths
+#   sudo systemctl enable --now csm.service
+
+[Unit]
+Description=Claude Session Manager
+After=network.target
+
+[Service]
+Type=simple
+# IMPORTANT: Change to your username / 重要：修改为你的用户名
+User=YOUR_USERNAME
+Group=YOUR_USERNAME
+
+WorkingDirectory=/opt/claude-session-manager
+ExecStart=/usr/bin/node dist/server/index.js
+
+# Environment / 环境变量
+Environment=NODE_ENV=production
+Environment=CSM_PORT=3727
+Environment=CSM_HOST=0.0.0.0
+# Environment=CSM_SECRET=your-secret-here
+# Environment=CSM_READ_ONLY=true
+
+# Security hardening / 安全加固
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadOnlyPaths=/home
+ReadWritePaths=/home/YOUR_USERNAME/.claude-session-manager
+
+# Restart policy / 重启策略
+Restart=always
+RestartSec=5
+
+# Logging / 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=csm
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,224 @@
+/**
+ * Audit panel / 审计面板
+ * Displays all tool_use commands from a session in a timeline view
+ * 以时间线展示会话中所有 tool_use 命令，便于安全审计
+ */
+
+import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  Terminal, FileEdit, FileText, FolderSearch, AlertTriangle,
+  CheckCircle, XCircle, Filter,
+} from 'lucide-react';
+import { sessions as sessionsApi, type AuditCommand } from '../utils/api';
+
+interface Props {
+  projectId: string;
+  sessionId: string;
+}
+
+const TOOL_ICONS: Record<string, React.ReactNode> = {
+  Bash: <Terminal size={14} />,
+  bash: <Terminal size={14} />,
+  Write: <FileEdit size={14} />,
+  Edit: <FileEdit size={14} />,
+  MultiEdit: <FileEdit size={14} />,
+  Read: <FileText size={14} />,
+  Grep: <FolderSearch size={14} />,
+  Glob: <FolderSearch size={14} />,
+  LS: <FolderSearch size={14} />,
+};
+
+const TOOL_COLORS: Record<string, string> = {
+  Bash: 'var(--status-warn)',
+  bash: 'var(--status-warn)',
+  Write: 'var(--status-info)',
+  Edit: 'var(--status-info)',
+  Read: 'var(--txt-3)',
+  Grep: 'var(--txt-3)',
+  Task: 'var(--accent)',
+};
+
+export default function AuditPanel({ projectId, sessionId }: Props) {
+  const { t } = useTranslation();
+  const [commands, setCommands] = useState<AuditCommand[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [toolFilter, setToolFilter] = useState<string>('all');
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    setLoading(true);
+    sessionsApi.commands(projectId, sessionId)
+      .then((data) => setCommands(data.commands))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [projectId, sessionId]);
+
+  // Get unique tool names for filter / 获取唯一工具名用于筛选
+  const toolNames = useMemo(
+    () => ['all', ...new Set(commands.map((c) => c.toolName))],
+    [commands]
+  );
+
+  // Filtered commands / 筛选后的命令
+  const filtered = useMemo(
+    () => toolFilter === 'all' ? commands : commands.filter((c) => c.toolName === toolFilter),
+    [commands, toolFilter]
+  );
+
+  const toggleExpand = (idx: number) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(idx) ? next.delete(idx) : next.add(idx);
+      return next;
+    });
+  };
+
+  // Stats / 统计
+  const errorCount = commands.filter((c) => c.isError).length;
+  const bashCount = commands.filter((c) => c.toolName === 'Bash' || c.toolName === 'bash').length;
+
+  if (loading) {
+    return (
+      <div className="p-4 space-y-3">
+        {[1, 2, 3, 4].map((i) => <div key={i} className="skeleton h-16 rounded-md" />)}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 text-center">
+        <AlertTriangle size={24} className="mx-auto mb-2" style={{ color: 'var(--status-err)' }} />
+        <p className="text-sm" style={{ color: 'var(--status-err)' }}>{error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Header / 头部 */}
+      <div className="p-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+        <h2 className="text-lg font-medium" style={{ color: 'var(--txt-1)' }}>
+          {t('audit.title')}
+        </h2>
+
+        {/* Stats strip / 统计条 */}
+        <div className="flex items-center gap-4 mt-2">
+          <span className="text-2xs" style={{ color: 'var(--txt-3)' }}>
+            {commands.length} commands
+          </span>
+          <span className="text-2xs" style={{ color: 'var(--status-warn)' }}>
+            {bashCount} shell
+          </span>
+          {errorCount > 0 && (
+            <span className="text-2xs" style={{ color: 'var(--status-err)' }}>
+              {errorCount} {t('audit.error')}
+            </span>
+          )}
+        </div>
+
+        {/* Tool filter / 工具筛选 */}
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
+          <Filter size={14} style={{ color: 'var(--txt-3)' }} />
+          {toolNames.map((name) => (
+            <button
+              key={name}
+              onClick={() => setToolFilter(name)}
+              className={`badge cursor-pointer ${toolFilter === name ? 'badge-tool' : ''}`}
+              style={toolFilter !== name ? { background: 'var(--surface-2)', color: 'var(--txt-2)' } : {}}
+            >
+              {name === 'all' ? t('audit.filter_tool') : name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Timeline / 时间线 */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {filtered.length === 0 && (
+          <p className="text-sm text-center py-4" style={{ color: 'var(--txt-3)' }}>
+            {t('audit.no_commands')}
+          </p>
+        )}
+
+        <div className="relative">
+          {/* Timeline line / 时间线竖线 */}
+          {filtered.length > 0 && (
+            <div
+              className="absolute left-4 top-0 bottom-0 w-px"
+              style={{ background: 'var(--border-default)' }}
+            />
+          )}
+
+          <div className="space-y-3">
+            {filtered.map((cmd, idx) => (
+              <div key={idx} className="relative pl-10">
+                {/* Timeline dot / 时间线圆点 */}
+                <div
+                  className="absolute left-2.5 top-3 w-3 h-3 rounded-full border-2"
+                  style={{
+                    borderColor: cmd.isError ? 'var(--status-err)' : TOOL_COLORS[cmd.toolName] || 'var(--txt-3)',
+                    background: 'var(--surface-0)',
+                  }}
+                />
+
+                <div
+                  className="card p-3 cursor-pointer"
+                  onClick={() => toggleExpand(idx)}
+                >
+                  {/* Command header / 命令头部 */}
+                  <div className="flex items-center gap-2">
+                    <span style={{ color: TOOL_COLORS[cmd.toolName] || 'var(--txt-3)' }}>
+                      {TOOL_ICONS[cmd.toolName] || <Terminal size={14} />}
+                    </span>
+                    <span className="badge badge-tool">{cmd.toolName}</span>
+                    {cmd.isError ? (
+                      <XCircle size={12} style={{ color: 'var(--status-err)' }} />
+                    ) : (
+                      <CheckCircle size={12} style={{ color: 'var(--status-ok)' }} />
+                    )}
+                    <span className="text-2xs ml-auto" style={{ color: 'var(--txt-3)' }}>
+                      {cmd.timestamp ? new Date(cmd.timestamp).toLocaleTimeString() : ''}
+                    </span>
+                  </div>
+
+                  {/* Command preview / 命令预览 */}
+                  {(cmd.toolName === 'Bash' || cmd.toolName === 'bash') && cmd.input.command && (
+                    <code
+                      className="block text-2xs mt-1.5 truncate"
+                      style={{ color: 'var(--txt-2)', fontFamily: 'JetBrains Mono, monospace' }}
+                    >
+                      $ {(cmd.input.command as string).split('\n')[0].slice(0, 100)}
+                    </code>
+                  )}
+
+                  {/* Expanded details / 展开的详情 */}
+                  {expanded.has(idx) && (
+                    <div className="mt-3 space-y-2">
+                      <div>
+                        <span className="text-2xs font-medium" style={{ color: 'var(--txt-3)' }}>Input:</span>
+                        <pre className="code-block text-2xs mt-1">
+                          {JSON.stringify(cmd.input, null, 2)}
+                        </pre>
+                      </div>
+                      {cmd.output && (
+                        <div>
+                          <span className="text-2xs font-medium" style={{ color: 'var(--txt-3)' }}>Output:</span>
+                          <pre className="code-block text-2xs mt-1 max-h-48 overflow-y-auto">
+                            {cmd.output}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
