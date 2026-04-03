@@ -47,7 +47,7 @@ function ToolUseBlock({ block }: { block: ContentBlock }) {
         <Terminal size={14} style={{ color: 'var(--status-warn)' }} />
         <span className="badge badge-tool">{block.name}</span>
         {isBash && (
-          <code className="text-2xs truncate flex-1" style={{ color: 'var(--txt-2)', fontFamily: 'JetBrains Mono, monospace' }}>
+          <code className="text-2xs truncate flex-1" style={{ color: 'var(--txt-2)', fontFamily: 'IBM Plex Mono, monospace' }}>
             {command.split('\n')[0].slice(0, 80)}
           </code>
         )}

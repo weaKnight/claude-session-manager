@@ -38,19 +38,35 @@ export default function Login({ setupRequired, onLogin, onSetup, error }: LoginP
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center px-4"
+      className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden"
       style={{ background: 'var(--surface-1)' }}
     >
-      <div className="w-full max-w-sm">
+      {/* Subtle grid background / 淡网格背景 */}
+      <div
+        className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: `
+            linear-gradient(var(--txt-1) 1px, transparent 1px),
+            linear-gradient(90deg, var(--txt-1) 1px, transparent 1px)
+          `,
+          backgroundSize: '48px 48px',
+        }}
+      />
+
+      <div className="w-full max-w-sm relative z-10">
         {/* Header / 头部 */}
         <div className="text-center mb-8">
           <div
-            className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4"
-            style={{ background: 'var(--accent-muted)' }}
+            className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-5"
+            style={{
+              background: 'var(--accent-muted)',
+              border: '1px solid var(--border-default)',
+              boxShadow: 'var(--shadow-md)',
+            }}
           >
-            <Terminal size={24} style={{ color: 'var(--accent)' }} />
+            <Terminal size={26} style={{ color: 'var(--accent)' }} />
           </div>
-          <h1 className="text-xl font-medium" style={{ color: 'var(--txt-1)' }}>
+          <h1 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--txt-1)' }}>
             {setupRequired ? t('auth.setup_title') : t('auth.login_title')}
           </h1>
           <p className="text-sm mt-2" style={{ color: 'var(--txt-2)' }}>
@@ -60,7 +76,7 @@ export default function Login({ setupRequired, onLogin, onSetup, error }: LoginP
 
         {/* Form / 表单 */}
         <form onSubmit={handleSubmit}>
-          <div className="card p-6">
+          <div className="card p-6" style={{ animation: 'fade-in-scale 0.3s ease-out' }}>
             <label
               className="block text-sm font-medium mb-2"
               style={{ color: 'var(--txt-2)' }}
@@ -69,10 +85,10 @@ export default function Login({ setupRequired, onLogin, onSetup, error }: LoginP
             </label>
             <div className="relative">
               <div
-                className="absolute left-3 top-1/2 -translate-y-1/2"
+                className="absolute left-3.5 top-1/2 -translate-y-1/2"
                 style={{ color: 'var(--txt-3)' }}
               >
-                <Lock size={16} />
+                <Lock size={15} />
               </div>
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -87,24 +103,24 @@ export default function Login({ setupRequired, onLogin, onSetup, error }: LoginP
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2"
                 style={{ color: 'var(--txt-3)', background: 'none', border: 'none', cursor: 'pointer' }}
               >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
 
             {error && (
-              <p className="text-sm mt-3" style={{ color: 'var(--status-err)' }}>
+              <p className="text-sm mt-3 font-medium" style={{ color: 'var(--status-err)' }}>
                 {error}
               </p>
             )}
 
             <button
               type="submit"
-              className="btn btn-primary w-full mt-4"
+              className="btn btn-primary w-full mt-5"
               disabled={loading || !password}
-              style={{ opacity: loading || !password ? 0.6 : 1 }}
+              style={{ opacity: loading || !password ? 0.5 : 1 }}
             >
               {loading ? t('common.loading') : setupRequired ? t('auth.setup_btn') : t('auth.login_btn')}
             </button>

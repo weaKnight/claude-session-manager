@@ -161,11 +161,11 @@ export default function Layout({ onLogout }: LayoutProps) {
           {/* Connection status / 连接状态 */}
           <div className="flex items-center gap-2 px-2 py-1">
             {connected ? (
-              <Wifi size={14} style={{ color: 'var(--status-ok)' }} />
+              <span className="live-dot" />
             ) : (
-              <WifiOff size={14} style={{ color: 'var(--txt-3)' }} />
+              <WifiOff size={12} style={{ color: 'var(--txt-3)' }} />
             )}
-            <span className="text-2xs" style={{ color: 'var(--txt-3)' }}>
+            <span className="text-2xs" style={{ color: connected ? 'var(--status-ok)' : 'var(--txt-3)' }}>
               {connected ? 'Live' : 'Offline'}
             </span>
           </div>

@@ -1,7 +1,7 @@
 /**
  * Design system / 设计系统
- * Industrial utilitarian aesthetic — no generic AI purple gradients
- * 工业实用主义美学 — 拒绝 AI 风格的紫色渐变
+ * Arctic steel aesthetic — cool slate blues, teal accents, crisp edges
+ * 极地钢铁美学 — 冷灰蓝调、青色点缀、利落边缘
  */
 
 @tailwind base;
@@ -11,67 +11,71 @@
 /* --- Light theme / 亮色主题 --- */
 :root {
   --surface-0: #ffffff;
-  --surface-1: #f7f6f3;
-  --surface-2: #eeedea;
-  --surface-3: #e4e3df;
+  --surface-1: #f4f6f9;
+  --surface-2: #e8ecf1;
+  --surface-3: #dce1e8;
 
-  --txt-1: #1a1a19;
-  --txt-2: #5c5b57;
-  --txt-3: #8a8985;
+  --txt-1: #0f1729;
+  --txt-2: #4a5568;
+  --txt-3: #8594a7;
 
-  --accent: #c47a2a;
-  --accent-muted: #f5e6d0;
-  --accent-strong: #9e5c12;
+  --accent: #0e7490;
+  --accent-muted: #e0f4f9;
+  --accent-strong: #0b5e75;
+  --accent-glow: rgba(14, 116, 144, 0.12);
 
-  --status-ok: #2d7a3a;
-  --status-warn: #b5850b;
-  --status-err: #c43535;
+  --status-ok: #0f8a5f;
+  --status-warn: #7c6a0a;
+  --status-err: #c03744;
   --status-info: #2563a8;
 
-  --border-default: rgba(0, 0, 0, 0.1);
-  --border-strong: rgba(0, 0, 0, 0.2);
+  --border-default: rgba(15, 23, 41, 0.08);
+  --border-strong: rgba(15, 23, 41, 0.16);
 
-  --role-user: #eef2f7;
-  --role-assistant: #f9f8f5;
-  --role-tool: #f3f0e8;
-  --role-error: #fdf0f0;
+  --role-user: #edf2fa;
+  --role-assistant: #f0f9fb;
+  --role-tool: #eef1f7;
+  --role-error: #fdf0f2;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 41, 0.04), 0 1px 2px rgba(15, 23, 41, 0.03);
+  --shadow-md: 0 4px 12px rgba(15, 23, 41, 0.06), 0 1px 4px rgba(15, 23, 41, 0.04);
+  --shadow-lg: 0 8px 24px rgba(15, 23, 41, 0.08), 0 2px 8px rgba(15, 23, 41, 0.04);
 
   color-scheme: light;
 }
 
 /* --- Dark theme / 暗色主题 --- */
 .dark {
-  --surface-0: #141413;
-  --surface-1: #1c1c1a;
-  --surface-2: #262624;
-  --surface-3: #33332f;
+  --surface-0: #0d1117;
+  --surface-1: #131920;
+  --surface-2: #1c2530;
+  --surface-3: #263040;
 
-  --txt-1: #e8e7e3;
-  --txt-2: #a5a49e;
-  --txt-3: #706f6a;
+  --txt-1: #e2e8f0;
+  --txt-2: #94a3b8;
+  --txt-3: #5e7086;
 
-  --accent: #d4923a;
-  --accent-muted: #3d2e18;
-  --accent-strong: #e8a84c;
+  --accent: #22d3ee;
+  --accent-muted: #0c2f38;
+  --accent-strong: #67e8f9;
+  --accent-glow: rgba(34, 211, 238, 0.1);
 
-  --status-ok: #4ade80;
-  --status-warn: #f59e0b;
-  --status-err: #ef4444;
+  --status-ok: #34d399;
+  --status-warn: #fbbf24;
+  --status-err: #f87171;
   --status-info: #60a5fa;
 
-  --border-default: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  --border-default: rgba(226, 232, 240, 0.06);
+  --border-strong: rgba(226, 232, 240, 0.12);
 
-  --role-user: #1a2230;
-  --role-assistant: #1c1c1a;
-  --role-tool: #242218;
-  --role-error: #2a1515;
+  --role-user: #111d2e;
+  --role-assistant: #0d1a20;
+  --role-tool: #131b27;
+  --role-error: #271418;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
 
   color-scheme: dark;
 }
@@ -80,10 +84,12 @@
 
 body {
   margin: 0;
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   background: var(--surface-1);
   color: var(--txt-1);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
 }
 
 *,
@@ -94,18 +100,50 @@ body {
 
 /* Scrollbar styling / 滚动条样式 */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border-strong);
-  border-radius: 3px;
+  border-radius: 100px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--txt-3);
+}
+
+/* Selection / 文本选中 */
+::selection {
+  background: var(--accent-muted);
+  color: var(--accent-strong);
+}
+
+/* --- Animations / 动画 --- */
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in-scale {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out both;
 }
 
 /* --- Utility classes / 工具类 --- */
@@ -117,6 +155,7 @@ body {
     background: var(--surface-0);
     border: 1px solid var(--border-default);
     box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
   }
 
   .card:hover {
@@ -126,16 +165,17 @@ body {
 
   /* Input fields / 输入框 */
   .input {
-    @apply w-full px-3 py-2 rounded-md text-sm transition-colors;
-    background: var(--surface-1);
+    @apply w-full px-3.5 py-2.5 rounded-lg text-sm;
+    background: var(--surface-0);
     border: 1px solid var(--border-default);
     color: var(--txt-1);
     outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
 
   .input:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-muted);
+    box-shadow: 0 0 0 3px var(--accent-glow);
   }
 
   .input::placeholder {
@@ -144,17 +184,24 @@ body {
 
   /* Button variants / 按钮变体 */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium;
     cursor: pointer;
     border: none;
+    transition: all 0.15s ease;
   }
 
   .btn-primary {
     background: var(--accent);
     color: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
   .btn-primary:hover {
     background: var(--accent-strong);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    transform: translateY(-0.5px);
+  }
+  .btn-primary:active {
+    transform: translateY(0);
   }
 
   .btn-ghost {
@@ -176,56 +223,55 @@ body {
 
   /* Badge / 标签 */
   .badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium;
+    @apply inline-flex items-center px-2 py-0.5 rounded-md text-2xs font-medium;
   }
 
   .badge-tool {
     background: var(--accent-muted);
-    color: var(--accent-strong);
+    color: var(--accent);
   }
 
   .badge-error {
-    background: #fde8e8;
+    background: var(--role-error);
     color: var(--status-err);
-  }
-  .dark .badge-error {
-    background: #2a1515;
   }
 
   /* Message bubbles / 消息气泡 */
   .msg-user {
     background: var(--role-user);
-    border-left: 3px solid var(--status-info);
+    border-left: 2px solid var(--status-info);
   }
 
   .msg-assistant {
     background: var(--role-assistant);
-    border-left: 3px solid var(--accent);
+    border-left: 2px solid var(--accent);
   }
 
   .msg-tool {
     background: var(--role-tool);
-    border-left: 3px solid var(--status-warn);
+    border-left: 2px solid var(--txt-3);
   }
 
   .msg-error {
     background: var(--role-error);
-    border-left: 3px solid var(--status-err);
+    border-left: 2px solid var(--status-err);
   }
 
   /* Code blocks / 代码块 */
   .code-block {
-    @apply rounded-md p-3 text-sm overflow-x-auto;
-    font-family: 'JetBrains Mono', monospace;
+    @apply rounded-lg p-3.5 text-sm overflow-x-auto;
+    font-family: 'IBM Plex Mono', monospace;
     background: var(--surface-2);
     border: 1px solid var(--border-default);
     tab-size: 2;
+    font-size: 0.8125rem;
   }
 
   /* Sidebar item / 侧边栏项 */
   .sidebar-item {
-    @apply flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer;
+    @apply flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm cursor-pointer;
     color: var(--txt-2);
+    transition: all 0.12s ease;
   }
   .sidebar-item:hover {
     background: var(--surface-2);
@@ -233,19 +279,20 @@ body {
   }
   .sidebar-item.active {
     background: var(--accent-muted);
-    color: var(--accent-strong);
+    color: var(--accent);
+    font-weight: 500;
   }
 
   /* Section header / 分区标题 */
   .section-label {
-    @apply text-2xs font-medium uppercase tracking-wider px-3 py-2;
+    @apply text-2xs font-semibold uppercase tracking-wider px-3 py-2;
     color: var(--txt-3);
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
   }
 
   /* Skeleton loading / 骨架屏加载 */
   .skeleton {
-    @apply rounded;
+    @apply rounded-lg;
     background: linear-gradient(
       90deg,
       var(--surface-2) 25%,
@@ -253,12 +300,14 @@ body {
       var(--surface-2) 75%
     );
     background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
+    animation: shimmer 1.5s ease-in-out infinite;
   }
 
-  @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+  /* Live indicator / 实时连接指示器 */
+  .live-dot {
+    @apply w-1.5 h-1.5 rounded-full;
+    background: var(--status-ok);
+    animation: pulse-glow 2s ease-in-out infinite;
   }
 }
 
@@ -269,8 +318,9 @@ body {
 .markdown-body h3 {
   margin-top: 1em;
   margin-bottom: 0.5em;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--txt-1);
+  letter-spacing: -0.02em;
 }
 .markdown-body h1 { font-size: 1.25rem; }
 .markdown-body h2 { font-size: 1.125rem; }
@@ -278,15 +328,16 @@ body {
 
 .markdown-body p {
   margin: 0.5em 0;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 .markdown-body code {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.85em;
-  padding: 0.15em 0.35em;
-  border-radius: 3px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.825em;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
   background: var(--surface-2);
+  color: var(--accent);
 }
 
 .markdown-body pre {
@@ -295,11 +346,12 @@ body {
 
 .markdown-body pre code {
   display: block;
-  padding: 0.75em 1em;
+  padding: 0.875em 1em;
   overflow-x: auto;
   background: var(--surface-2);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: 8px;
+  color: var(--txt-1);
 }
 
 .markdown-body ul,
@@ -308,17 +360,33 @@ body {
   margin: 0.5em 0;
 }
 
+.markdown-body li {
+  line-height: 1.65;
+}
+
 .markdown-body a {
-  color: var(--status-info);
+  color: var(--accent);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--accent-glow);
+  transition: text-decoration-color 0.15s ease;
+}
+.markdown-body a:hover {
+  text-decoration-color: var(--accent);
 }
 
 .markdown-body blockquote {
   margin: 0.75em 0;
   padding: 0.5em 1em;
-  border-left: 3px solid var(--border-strong);
+  border-left: 2px solid var(--accent);
   color: var(--txt-2);
   background: var(--surface-1);
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 8px 8px 0;
+}
+
+/* --- Extra utilities / 额外工具类 --- */
+
+.text-2xs {
+  font-size: 0.6875rem;
+  line-height: 1rem;
 }

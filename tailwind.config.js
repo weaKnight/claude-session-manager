@@ -4,8 +4,8 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
-      // Custom color palette — industrial/utilitarian aesthetic
-      // 自定义调色板 — 工业/实用主义风格
+      // Custom color palette — arctic steel aesthetic
+      // 自定义调色板 — 极地钢铁风格
       colors: {
         surface: {
           0: 'var(--surface-0)',
@@ -35,8 +35,8 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['DM Sans', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'monospace'],
       },
       fontSize: {
         '2xs': ['0.6875rem', { lineHeight: '1rem' }],
