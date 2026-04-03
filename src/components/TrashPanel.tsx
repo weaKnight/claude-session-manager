@@ -66,8 +66,8 @@ export default function TrashPanel() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full" style={{ color: 'var(--txt-3)' }}>
-        <p className="text-sm">{t('common.loading')}</p>
+      <div className="flex items-center justify-center h-full">
+        <span className="spinner" style={{ width: 24, height: 24 }} />
       </div>
     );
   }
@@ -94,23 +94,32 @@ export default function TrashPanel() {
       </div>
 
       {items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16" style={{ color: 'var(--txt-3)' }}>
-          <Trash2 size={32} className="mb-3 opacity-30" />
+        <div className="empty-state">
+          <div className="empty-state-icon">
+            <Trash2 size={28} />
+          </div>
           <p className="text-sm">{t('trash.no_items')}</p>
+          <p className="text-2xs mt-1" style={{ color: 'var(--txt-3)' }}>
+            Deleted sessions will appear here
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
-          {items.map((item) => (
-            <div key={item.fileName} className="group card p-4">
+          {items.map((item, idx) => (
+            <div
+              key={item.fileName}
+              className="group card p-4 animate-fade-in"
+              style={{ animationDelay: `${idx * 40}ms` }}
+            >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate" style={{ color: 'var(--txt-1)' }}>
                     {item.sessionId}
                   </p>
                   <div className="flex items-center gap-3 mt-1 text-2xs" style={{ color: 'var(--txt-3)' }}>
-                    <span>{item.projectId}</span>
+                    <span className="font-medium" style={{ color: 'var(--txt-2)' }}>{item.projectId}</span>
                     <span>{formatDeletedAt(item.deletedAt)}</span>
-                    <span>{formatSize(item.fileSize)}</span>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatSize(item.fileSize)}</span>
                   </div>
                 </div>
                 <button

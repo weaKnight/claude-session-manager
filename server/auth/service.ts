@@ -125,10 +125,12 @@ export async function login(
   loginAttempts.delete(clientIp);
 
   const secret = getJwtSecret();
+  // Cast needed: @types/jsonwebtoken@9.0.10 narrowed expiresIn to StringValue template literal
+  // 类型断言：新版类型定义收窄了 expiresIn 为 StringValue 模板字面量
   const token = jwt.sign(
     { iss: 'claude-session-manager', iat: Math.floor(Date.now() / 1000) },
-    secret,
-    { expiresIn: config.jwtExpiry }
+    secret as jwt.Secret,
+    { expiresIn: config.jwtExpiry } as jwt.SignOptions
   );
 
   logger.info(`Login successful from ${clientIp}`);

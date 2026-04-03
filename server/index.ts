@@ -39,6 +39,9 @@ app.use(helmet({
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:'],
       connectSrc: ["'self'"],
+      // Disable upgrade-insecure-requests for HTTP (LAN) access
+      // 禁用 HTTPS 升级以支持内网 HTTP 访问
+      upgradeInsecureRequests: null,
     },
   },
 }));

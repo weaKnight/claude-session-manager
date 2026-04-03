@@ -6,7 +6,7 @@
 
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Clock, ArrowRight } from 'lucide-react';
+import { Search, Clock, ArrowRight, Loader2 } from 'lucide-react';
 import { search as searchApi, type SearchResult } from '../utils/api';
 
 interface Props {
@@ -59,16 +59,19 @@ export default function SearchPanel({ onNavigate }: Props) {
           />
         </div>
         <button onClick={handleSearch} className="btn btn-primary" disabled={loading}>
-          {loading ? '...' : t('nav.search')}
+          {loading ? <Loader2 size={15} className="animate-spin" /> : t('nav.search')}
         </button>
       </div>
 
       {/* Results / 结果 */}
       <div className="flex-1 overflow-y-auto">
         {searched && !loading && results.length === 0 && (
-          <p className="text-sm text-center py-8" style={{ color: 'var(--txt-3)' }}>
-            {t('search.no_results')}
-          </p>
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <Search size={28} />
+            </div>
+            <p className="text-sm">{t('search.no_results')}</p>
+          </div>
         )}
 
         {results.length > 0 && (
@@ -82,14 +85,15 @@ export default function SearchPanel({ onNavigate }: Props) {
             <div
               key={`${result.sessionId}-${idx}`}
               onClick={() => onNavigate(result.projectId, result.sessionId)}
-              className="card p-3 cursor-pointer"
+              className="card p-3 cursor-pointer animate-fade-in"
+              style={{ animationDelay: `${idx * 40}ms` }}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate" style={{ color: 'var(--txt-1)' }}>
                     {result.summary || result.sessionId}
                   </p>
-                  <p className="text-2xs mt-0.5" style={{ color: 'var(--accent)' }}>
+                  <p className="text-2xs mt-0.5 font-medium" style={{ color: 'var(--accent)' }}>
                     {result.projectName}
                   </p>
                   {result.matchSnippet && (
@@ -99,7 +103,7 @@ export default function SearchPanel({ onNavigate }: Props) {
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-2xs" style={{ color: 'var(--txt-3)' }}>
+                  <span className="text-2xs" style={{ color: 'var(--txt-3)', fontFamily: 'JetBrains Mono, monospace' }}>
                     <Clock size={10} className="inline mr-1" />
                     {result.timestamp ? new Date(result.timestamp).toLocaleDateString() : ''}
                   </span>

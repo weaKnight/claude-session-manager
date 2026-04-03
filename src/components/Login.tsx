@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Lock, Eye, EyeOff, Terminal } from 'lucide-react';
+import { Lock, Eye, EyeOff, Terminal, Loader2 } from 'lucide-react';
 
 interface LoginProps {
   setupRequired: boolean;
@@ -51,6 +51,11 @@ export default function Login({ setupRequired, onLogin, onSetup, error }: LoginP
           `,
           backgroundSize: '48px 48px',
         }}
+      />
+      {/* Gradient orb / 渐变光球 */}
+      <div
+        className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full opacity-[0.06] blur-3xl pointer-events-none"
+        style={{ background: 'var(--accent)' }}
       />
 
       <div className="w-full max-w-sm relative z-10">
@@ -122,19 +127,27 @@ export default function Login({ setupRequired, onLogin, onSetup, error }: LoginP
               disabled={loading || !password}
               style={{ opacity: loading || !password ? 0.5 : 1 }}
             >
-              {loading ? t('common.loading') : setupRequired ? t('auth.setup_btn') : t('auth.login_btn')}
+              {loading ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 size={15} className="animate-spin" />
+                  {t('common.loading')}
+                </span>
+              ) : setupRequired ? t('auth.setup_btn') : t('auth.login_btn')}
             </button>
           </div>
         </form>
 
-        {/* Language toggle / 语言切换 */}
-        <div className="text-center mt-6">
+        {/* Footer / 底部 */}
+        <div className="text-center mt-6 space-y-2">
           <button
             onClick={toggleLang}
             className="btn btn-ghost text-2xs"
           >
             {i18n.language.startsWith('zh') ? 'English' : '中文'}
           </button>
+          <p className="text-2xs" style={{ color: 'var(--txt-3)', fontFamily: 'JetBrains Mono, monospace' }}>
+            v1.0 &middot; Claude Session Manager
+          </p>
         </div>
       </div>
     </div>

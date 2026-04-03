@@ -8,7 +8,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FolderTree, Search, Shield, BarChart3, Trash2, LogOut,
-  Sun, Moon, ChevronLeft, Menu, Wifi, WifiOff,
+  Sun, Moon, ChevronLeft, Menu, WifiOff,
+  TrendingUp, Activity, Database,
 } from 'lucide-react';
 import { projects as projectsApi, type ProjectInfo, type SessionMeta } from '../utils/api';
 import { useSSE } from '../hooks/useSSE';
@@ -157,26 +158,33 @@ export default function Layout({ onLogout }: LayoutProps) {
         )}
 
         {/* Bottom controls / 底部控制 */}
-        <div className="p-3 border-t space-y-1" style={{ borderColor: 'var(--border-default)' }}>
+        <div className="p-3 border-t space-y-2" style={{ borderColor: 'var(--border-default)' }}>
           {/* Connection status / 连接状态 */}
-          <div className="flex items-center gap-2 px-2 py-1">
+          <div
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
+            style={{ background: connected ? 'rgba(15, 138, 95, 0.06)' : 'var(--surface-2)' }}
+          >
             {connected ? (
               <span className="live-dot" />
             ) : (
               <WifiOff size={12} style={{ color: 'var(--txt-3)' }} />
             )}
-            <span className="text-2xs" style={{ color: connected ? 'var(--status-ok)' : 'var(--txt-3)' }}>
+            <span className="text-2xs font-medium" style={{ color: connected ? 'var(--status-ok)' : 'var(--txt-3)' }}>
               {connected ? 'Live' : 'Offline'}
             </span>
+            {connected && (
+              <Activity size={10} className="ml-auto" style={{ color: 'var(--status-ok)', opacity: 0.5 }} />
+            )}
           </div>
 
+          {/* Controls / 控制栏 */}
           <div className="flex items-center gap-1">
             <button onClick={() => setDark(!dark)} className="btn btn-ghost p-2 flex-1">
               {dark ? <Sun size={14} /> : <Moon size={14} />}
               <span className="text-2xs">{dark ? t('common.light_mode') : t('common.dark_mode')}</span>
             </button>
             <button onClick={toggleLang} className="btn btn-ghost p-2">
-              <span className="text-2xs">{i18n.language.startsWith('zh') ? 'EN' : '中'}</span>
+              <span className="text-2xs font-medium">{i18n.language.startsWith('zh') ? 'EN' : '中'}</span>
             </button>
             <button onClick={onLogout} className="btn btn-ghost p-2" title={t('auth.logout')}>
               <LogOut size={14} />
@@ -234,24 +242,91 @@ export default function Layout({ onLogout }: LayoutProps) {
             <TrashPanel />
           )}
           {view === 'stats' && (
-            <div className="p-6">
-              <h2 className="text-lg font-medium mb-4">{t('stats.title')}</h2>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="card p-4 text-center">
-                  <div className="text-2xl font-medium" style={{ color: 'var(--accent)' }}>{projectList.length}</div>
-                  <div className="text-sm mt-1" style={{ color: 'var(--txt-2)' }}>{t('stats.total_projects')}</div>
+            <div className="p-6 max-w-4xl mx-auto">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 rounded-lg" style={{ background: 'var(--accent-muted)' }}>
+                  <BarChart3 size={20} style={{ color: 'var(--accent)' }} />
                 </div>
-                <div className="card p-4 text-center">
-                  <div className="text-2xl font-medium" style={{ color: 'var(--accent)' }}>
-                    {projectList.reduce((s, p) => s + p.sessionCount, 0)}
-                  </div>
-                  <div className="text-sm mt-1" style={{ color: 'var(--txt-2)' }}>{t('stats.total_sessions')}</div>
-                </div>
-                <div className="card p-4 text-center">
-                  <div className="text-2xl font-medium" style={{ color: 'var(--accent)' }}>—</div>
-                  <div className="text-sm mt-1" style={{ color: 'var(--txt-2)' }}>{t('stats.total_messages')}</div>
+                <div>
+                  <h2 className="text-lg font-semibold" style={{ color: 'var(--txt-1)' }}>{t('stats.title')}</h2>
+                  <p className="text-2xs" style={{ color: 'var(--txt-3)' }}>Overview of your Claude Code usage</p>
                 </div>
               </div>
+
+              {/* KPI cards / KPI 卡片 */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <div className="kpi-card animate-count-up" style={{ animationDelay: '0ms' }}>
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <FolderTree size={16} style={{ color: 'var(--accent)', opacity: 0.6 }} />
+                  </div>
+                  <div className="kpi-value">{projectList.length}</div>
+                  <div className="kpi-label">{t('stats.total_projects')}</div>
+                  <div className="kpi-trend" style={{ color: 'var(--status-ok)' }}>
+                    <TrendingUp size={10} className="inline mr-1" />
+                    Active
+                  </div>
+                </div>
+                <div className="kpi-card animate-count-up" style={{ animationDelay: '80ms' }}>
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Database size={16} style={{ color: 'var(--accent)', opacity: 0.6 }} />
+                  </div>
+                  <div className="kpi-value">
+                    {projectList.reduce((s, p) => s + p.sessionCount, 0)}
+                  </div>
+                  <div className="kpi-label">{t('stats.total_sessions')}</div>
+                  <div className="kpi-trend" style={{ color: 'var(--txt-3)' }}>
+                    {projectList.length > 0
+                      ? `~${Math.round(projectList.reduce((s, p) => s + p.sessionCount, 0) / projectList.length)} per project`
+                      : '—'}
+                  </div>
+                </div>
+                <div className="kpi-card animate-count-up" style={{ animationDelay: '160ms' }}>
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Activity size={16} style={{ color: 'var(--accent)', opacity: 0.6 }} />
+                  </div>
+                  <div className="kpi-value">—</div>
+                  <div className="kpi-label">{t('stats.total_messages')}</div>
+                  <div className="kpi-trend" style={{ color: 'var(--txt-3)' }}>
+                    Coming soon
+                  </div>
+                </div>
+              </div>
+
+              {/* Project breakdown / 项目分布 */}
+              {projectList.length > 0 && (
+                <div className="card p-5">
+                  <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--txt-1)' }}>
+                    Project Breakdown
+                  </h3>
+                  <div className="space-y-3">
+                    {projectList
+                      .sort((a, b) => b.sessionCount - a.sessionCount)
+                      .slice(0, 8)
+                      .map((project) => {
+                        const maxSessions = Math.max(...projectList.map((p) => p.sessionCount), 1);
+                        const pct = Math.round((project.sessionCount / maxSessions) * 100);
+                        return (
+                          <div key={project.encodedPath} className="group cursor-pointer" onClick={() => { setView('projects'); handleSelectProject(project.encodedPath); }}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm truncate flex-1" style={{ color: 'var(--txt-1)' }}>
+                                {project.displayName}
+                              </span>
+                              <span
+                                className="text-2xs font-medium ml-2"
+                                style={{ color: 'var(--txt-3)', fontFamily: 'JetBrains Mono, monospace' }}
+                              >
+                                {project.sessionCount}
+                              </span>
+                            </div>
+                            <div className="token-bar">
+                              <div className="token-bar-fill" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

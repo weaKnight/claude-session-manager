@@ -100,20 +100,31 @@ export default function AuditPanel({ projectId, sessionId }: Props) {
     <div className="h-full flex flex-col">
       {/* Header / 头部 */}
       <div className="p-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
-        <h2 className="text-lg font-medium" style={{ color: 'var(--txt-1)' }}>
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--txt-1)' }}>
           {t('audit.title')}
         </h2>
 
         {/* Stats strip / 统计条 */}
-        <div className="flex items-center gap-4 mt-2">
-          <span className="text-2xs" style={{ color: 'var(--txt-3)' }}>
+        <div className="flex items-center gap-3 mt-2">
+          <span
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-2xs font-medium"
+            style={{ background: 'var(--surface-2)', color: 'var(--txt-2)', fontFamily: 'JetBrains Mono, monospace' }}
+          >
             {commands.length} commands
           </span>
-          <span className="text-2xs" style={{ color: 'var(--status-warn)' }}>
+          <span
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-2xs font-medium"
+            style={{ background: 'rgba(124, 106, 10, 0.08)', color: 'var(--status-warn)', fontFamily: 'JetBrains Mono, monospace' }}
+          >
+            <Terminal size={10} />
             {bashCount} shell
           </span>
           {errorCount > 0 && (
-            <span className="text-2xs" style={{ color: 'var(--status-err)' }}>
+            <span
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-2xs font-medium"
+              style={{ background: 'var(--role-error)', color: 'var(--status-err)', fontFamily: 'JetBrains Mono, monospace' }}
+            >
+              <AlertTriangle size={10} />
               {errorCount} {t('audit.error')}
             </span>
           )}
@@ -154,10 +165,10 @@ export default function AuditPanel({ projectId, sessionId }: Props) {
 
           <div className="space-y-3">
             {filtered.map((cmd, idx) => (
-              <div key={idx} className="relative pl-10">
+              <div key={idx} className="relative pl-10 animate-fade-in" style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}>
                 {/* Timeline dot / 时间线圆点 */}
                 <div
-                  className="absolute left-2.5 top-3 w-3 h-3 rounded-full border-2"
+                  className={`absolute left-2.5 top-3 w-3 h-3 rounded-full border-2 ${idx === 0 ? 'animate-timeline-pulse' : ''}`}
                   style={{
                     borderColor: cmd.isError ? 'var(--status-err)' : TOOL_COLORS[cmd.toolName] || 'var(--txt-3)',
                     background: 'var(--surface-0)',
@@ -179,7 +190,7 @@ export default function AuditPanel({ projectId, sessionId }: Props) {
                     ) : (
                       <CheckCircle size={12} style={{ color: 'var(--status-ok)' }} />
                     )}
-                    <span className="text-2xs ml-auto" style={{ color: 'var(--txt-3)' }}>
+                    <span className="text-2xs ml-auto" style={{ color: 'var(--txt-3)', fontFamily: 'JetBrains Mono, monospace' }}>
                       {cmd.timestamp ? new Date(cmd.timestamp).toLocaleTimeString() : ''}
                     </span>
                   </div>
@@ -188,7 +199,7 @@ export default function AuditPanel({ projectId, sessionId }: Props) {
                   {(cmd.toolName === 'Bash' || cmd.toolName === 'bash') && cmd.input.command && (
                     <code
                       className="block text-2xs mt-1.5 truncate"
-                      style={{ color: 'var(--txt-2)', fontFamily: 'JetBrains Mono, monospace' }}
+                      style={{ color: 'var(--txt-2)', fontFamily: "'JetBrains Mono', monospace" }}
                     >
                       $ {(cmd.input.command as string).split('\n')[0].slice(0, 100)}
                     </code>

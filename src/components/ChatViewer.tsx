@@ -4,11 +4,12 @@
  * 渲染会话消息，支持 Markdown、代码块和工具调用
  */
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft, User, Bot, Terminal, AlertTriangle,
   Copy, Check, ChevronDown, ChevronRight, Shield,
+  ArrowDown,
 } from 'lucide-react';
 import { sessions as sessionsApi, type ParsedMessage, type ContentBlock } from '../utils/api';
 import { marked } from 'marked';
@@ -38,22 +39,26 @@ function ToolUseBlock({ block }: { block: ContentBlock }) {
   const command = isBash ? (input.command as string || '') : JSON.stringify(input, null, 2);
 
   return (
-    <div className="msg-tool rounded-md p-3 my-2">
+    <div className="msg-tool rounded-md p-3 my-2 transition-all duration-150">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full text-left"
+        className="flex items-center gap-2 w-full text-left cursor-pointer"
       >
-        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <span className="transition-transform duration-150" style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          <ChevronRight size={14} />
+        </span>
         <Terminal size={14} style={{ color: 'var(--status-warn)' }} />
         <span className="badge badge-tool">{block.name}</span>
         {isBash && (
-          <code className="text-2xs truncate flex-1" style={{ color: 'var(--txt-2)', fontFamily: 'IBM Plex Mono, monospace' }}>
+          <code className="text-2xs truncate flex-1" style={{ color: 'var(--txt-2)', fontFamily: 'JetBrains Mono, monospace' }}>
             {command.split('\n')[0].slice(0, 80)}
           </code>
         )}
       </button>
       {expanded && (
-        <pre className="code-block mt-2 text-2xs">{command}</pre>
+        <div className="animate-expand">
+          <pre className="code-block mt-2 text-2xs">{command}</pre>
+        </div>
       )}
     </div>
   );
@@ -167,7 +172,10 @@ function MessageBubble({ message }: { message: ParsedMessage }) {
 
       {/* Token usage / Token 用量 */}
       {message.usage && (isAssistant) && (
-        <div className="flex items-center gap-3 mt-1 text-2xs" style={{ color: 'var(--txt-3)' }}>
+        <div
+          className="flex items-center gap-3 mt-1.5 text-2xs"
+          style={{ color: 'var(--txt-3)', fontFamily: 'JetBrains Mono, monospace' }}
+        >
           <span>↓{message.usage.input_tokens || 0} ↑{message.usage.output_tokens || 0}</span>
           {message.costUSD != null && <span>${message.costUSD.toFixed(4)}</span>}
           {message.durationMs != null && <span>{(message.durationMs / 1000).toFixed(1)}s</span>}
@@ -183,6 +191,7 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
   const [meta, setMeta] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -197,6 +206,17 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
       .finally(() => setLoading(false));
   }, [projectId, sessionId]);
 
+  // Track scroll position for scroll-to-bottom button / 跟踪滚动位置
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 200);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, []);
+
   // Filter out empty system messages / 过滤空系统消息
   const visibleMessages = useMemo(
     () => messages.filter((m) => {
@@ -207,7 +227,7 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
   );
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       {/* Header bar / 头部栏 */}
       <div
         className="flex items-center gap-3 px-4 py-3 border-b"
@@ -240,11 +260,11 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
       </div>
 
       {/* Messages / 消息列表 */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-5">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 space-y-5 relative">
         {loading && (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="skeleton h-20 rounded-md" />
+              <div key={i} className="skeleton h-20 rounded-md" style={{ animationDelay: `${i * 100}ms` }} />
             ))}
           </div>
         )}
@@ -260,15 +280,28 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
         )}
 
         {!loading && !error && visibleMessages.length === 0 && (
-          <p className="text-sm text-center" style={{ color: 'var(--txt-3)' }}>
-            {t('chat.no_messages')}
-          </p>
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <Bot size={28} />
+            </div>
+            <p className="text-sm">{t('chat.no_messages')}</p>
+          </div>
         )}
 
-        {visibleMessages.map((msg) => (
-          <MessageBubble key={msg.uuid} message={msg} />
+        {visibleMessages.map((msg, idx) => (
+          <div key={msg.uuid}>
+            {idx > 0 && msg.role === 'user' && <div className="msg-divider" />}
+            <MessageBubble message={msg} />
+          </div>
         ))}
       </div>
+
+      {/* Scroll to bottom / 滚到底部 */}
+      {showScrollBtn && (
+        <button onClick={scrollToBottom} className="scroll-bottom-btn animate-fade-in" style={{ position: 'absolute', bottom: 24, right: 24 }}>
+          <ArrowDown size={16} />
+        </button>
+      )}
     </div>
   );
 }
