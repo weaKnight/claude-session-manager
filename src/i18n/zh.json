@@ -53,7 +53,17 @@
     "copy": "复制",
     "copied": "已复制！",
     "no_messages": "此会话暂无消息。",
-    "tokens_used": "Token 用量"
+    "tokens_used": "Token 用量",
+    "view_full": "完整",
+    "view_compact": "精简",
+    "view_dialog": "对话",
+    "view_changes": "变更",
+    "no_commands_compact": "此会话暂无命令。",
+    "no_changes": "此会话暂无文件变更。",
+    "file_created": "新建",
+    "file_modified": "修改",
+    "assistant_summary": "Claude 已回复",
+    "commands_count": "{{count}} 条命令"
   },
   "search": {
     "placeholder": "搜索消息、项目...",

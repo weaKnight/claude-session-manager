@@ -451,6 +451,69 @@ body {
     background: var(--border-default);
   }
 
+  /* View mode tabs / 视图模式标签 */
+  .view-tab {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-2xs font-medium cursor-pointer;
+    color: var(--txt-3);
+    background: transparent;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+  }
+  .view-tab:hover {
+    color: var(--txt-2);
+    background: var(--surface-2);
+  }
+  .view-tab.active {
+    color: var(--accent);
+    background: var(--accent-muted);
+    border-color: var(--accent);
+  }
+
+  /* File change card / 文件变更卡片 */
+  .change-card {
+    @apply rounded-lg overflow-hidden;
+    border: 1px solid var(--border-default);
+    background: var(--surface-0);
+  }
+  .change-card-header {
+    @apply flex items-center gap-2 px-3 py-2 text-sm;
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--border-default);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+  }
+  .change-card-body {
+    @apply p-3 text-2xs overflow-x-auto;
+    font-family: 'JetBrains Mono', monospace;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  .change-type-badge {
+    @apply inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium;
+  }
+  .change-type-write {
+    background: rgba(15, 138, 95, 0.1);
+    color: var(--status-ok);
+  }
+  .change-type-edit {
+    background: rgba(37, 99, 168, 0.1);
+    color: var(--status-info);
+  }
+
+  /* Compact assistant summary / 精简模式助手摘要 */
+  .compact-summary {
+    @apply flex items-center gap-2 px-3 py-2 rounded-md text-2xs;
+    background: var(--surface-1);
+    color: var(--txt-3);
+    border: 1px solid var(--border-default);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .compact-summary:hover {
+    background: var(--surface-2);
+    color: var(--txt-2);
+  }
+
   /* Loading spinner / 加载旋转器 */
   .spinner {
     @apply w-4 h-4 rounded-full;

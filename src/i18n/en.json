@@ -53,7 +53,17 @@
     "copy": "Copy",
     "copied": "Copied!",
     "no_messages": "No messages in this session.",
-    "tokens_used": "Tokens used"
+    "tokens_used": "Tokens used",
+    "view_full": "Full",
+    "view_compact": "Compact",
+    "view_dialog": "Dialog",
+    "view_changes": "Changes",
+    "no_commands_compact": "No commands in this session.",
+    "no_changes": "No file changes in this session.",
+    "file_created": "Created",
+    "file_modified": "Modified",
+    "assistant_summary": "Claude responded",
+    "commands_count": "{{count}} commands"
   },
   "search": {
     "placeholder": "Search messages, projects...",

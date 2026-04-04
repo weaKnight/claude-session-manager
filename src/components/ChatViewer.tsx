@@ -1,7 +1,9 @@
 /**
  * Chat viewer / 聊天查看器
  * Renders session messages with Markdown, code blocks, and tool use
+ * Supports 3 view modes: Full, Compact (user + commands), Changes (file diffs)
  * 渲染会话消息，支持 Markdown、代码块和工具调用
+ * 支持 3 种视图模式：完整、精简（用户+命令）、变更（文件差异）
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -9,11 +11,13 @@ import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft, User, Bot, Terminal, AlertTriangle,
   Copy, Check, ChevronDown, ChevronRight, Shield,
-  ArrowDown,
+  ArrowDown, Layers, Zap, FileCode, FileEdit, FilePlus, MessageSquare,
 } from 'lucide-react';
 import { sessions as sessionsApi, type ParsedMessage, type ContentBlock } from '../utils/api';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+
+type ViewMode = 'full' | 'dialog' | 'compact' | 'changes';
 
 interface Props {
   projectId: string;
@@ -25,16 +29,18 @@ interface Props {
 marked.setOptions({ gfm: true, breaks: true });
 
 function renderMarkdown(text: string): string {
+  // All HTML is sanitized via DOMPurify to prevent XSS
+  // 所有 HTML 通过 DOMPurify 消毒以防止 XSS
   const raw = marked.parse(text) as string;
   return DOMPurify.sanitize(raw);
 }
 
-function ToolUseBlock({ block }: { block: ContentBlock }) {
-  const [expanded, setExpanded] = useState(false);
-  const { t } = useTranslation();
+// --- Shared sub-components / 共享子组件 ---
+
+function ToolUseBlock({ block, defaultExpanded = false }: { block: ContentBlock; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
   const input = block.input || {};
-  // Format Bash command specially / 特殊格式化 Bash 命令
   const isBash = block.name === 'Bash' || block.name === 'bash';
   const command = isBash ? (input.command as string || '') : JSON.stringify(input, null, 2);
 
@@ -102,6 +108,8 @@ function ToolResultBlock({ block }: { block: ContentBlock }) {
   );
 }
 
+// --- Full view message bubble / 完整视图消息气泡 ---
+
 function MessageBubble({ message }: { message: ParsedMessage }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
@@ -124,6 +132,8 @@ function MessageBubble({ message }: { message: ParsedMessage }) {
   };
 
   const bubbleClass = isUser ? 'msg-user' : isAssistant ? 'msg-assistant' : 'msg-tool';
+
+  const sanitizedHtml = textContent ? renderMarkdown(textContent) : '';
 
   return (
     <div className="animate-fade-in">
@@ -152,11 +162,11 @@ function MessageBubble({ message }: { message: ParsedMessage }) {
         )}
       </div>
 
-      {/* Text content / 文本内容 */}
-      {textContent && (
+      {/* Text content (sanitized via DOMPurify) / 文本内容（已通过 DOMPurify 消毒） */}
+      {sanitizedHtml && (
         <div
           className={`${bubbleClass} rounded-md p-3 markdown-body`}
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(textContent) }}
+          dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
         />
       )}
 
@@ -185,6 +195,237 @@ function MessageBubble({ message }: { message: ParsedMessage }) {
   );
 }
 
+// --- Compact view / 精简视图 ---
+
+interface CompactGroup {
+  userMessage: ParsedMessage;
+  toolBlocks: ContentBlock[];
+  resultBlocks: ContentBlock[];
+  assistantTextPreview: string;
+  commandCount: number;
+}
+
+function buildCompactGroups(messages: ParsedMessage[]): CompactGroup[] {
+  const groups: CompactGroup[] = [];
+  let currentUser: ParsedMessage | null = null;
+  let tools: ContentBlock[] = [];
+  let results: ContentBlock[] = [];
+  let textPreview = '';
+  let cmdCount = 0;
+
+  for (const msg of messages) {
+    if (msg.role === 'user') {
+      if (currentUser) {
+        groups.push({
+          userMessage: currentUser,
+          toolBlocks: tools,
+          resultBlocks: results,
+          assistantTextPreview: textPreview.slice(0, 120),
+          commandCount: cmdCount,
+        });
+      }
+      currentUser = msg;
+      tools = [];
+      results = [];
+      textPreview = '';
+      cmdCount = 0;
+    } else if (msg.role === 'assistant') {
+      for (const block of msg.content) {
+        if (block.type === 'tool_use') {
+          tools.push(block);
+          cmdCount++;
+        } else if (block.type === 'tool_result') {
+          results.push(block);
+        } else if (block.type === 'text' && block.text && !textPreview) {
+          textPreview = block.text;
+        }
+      }
+    }
+  }
+  if (currentUser) {
+    groups.push({
+      userMessage: currentUser,
+      toolBlocks: tools,
+      resultBlocks: results,
+      assistantTextPreview: textPreview.slice(0, 120),
+      commandCount: cmdCount,
+    });
+  }
+  return groups;
+}
+
+function CompactGroupView({ group, idx }: { group: CompactGroup; idx: number }) {
+  const { t } = useTranslation();
+  const [showAssistant, setShowAssistant] = useState(false);
+
+  const userText = group.userMessage.content
+    .filter((b): b is ContentBlock & { type: 'text' } => b.type === 'text')
+    .map((b) => b.text || '')
+    .join('\n');
+
+  const sanitizedUserHtml = userText ? renderMarkdown(userText) : '';
+  const sanitizedAssistantHtml = showAssistant && group.assistantTextPreview
+    ? renderMarkdown(group.assistantTextPreview)
+    : '';
+
+  return (
+    <div className="animate-fade-in" style={{ animationDelay: `${idx * 40}ms` }}>
+      {/* User input / 用户输入 */}
+      <div className="flex items-center gap-2 mb-1.5">
+        <User size={14} style={{ color: 'var(--status-info)' }} />
+        <span className="text-2xs font-medium" style={{ color: 'var(--txt-2)' }}>{t('chat.user')}</span>
+        <span className="text-2xs" style={{ color: 'var(--txt-3)' }}>
+          {group.userMessage.timestamp ? new Date(group.userMessage.timestamp).toLocaleTimeString() : ''}
+        </span>
+      </div>
+      {sanitizedUserHtml && (
+        <div className="msg-user rounded-md p-3 markdown-body" dangerouslySetInnerHTML={{ __html: sanitizedUserHtml }} />
+      )}
+
+      {/* Assistant summary (collapsed) / 助手摘要（折叠） */}
+      {group.assistantTextPreview && (
+        <div className="compact-summary my-2" onClick={() => setShowAssistant(!showAssistant)}>
+          <Bot size={12} style={{ color: 'var(--accent)' }} />
+          <span className="flex-1 truncate">
+            {showAssistant ? t('chat.assistant_summary') : group.assistantTextPreview + '...'}
+          </span>
+          {group.commandCount > 0 && (
+            <span className="badge badge-tool">
+              {t('chat.commands_count', { count: group.commandCount })}
+            </span>
+          )}
+          <ChevronDown size={12} className="transition-transform duration-150" style={{ transform: showAssistant ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+        </div>
+      )}
+
+      {/* Expanded assistant text (sanitized) / 展开的助手文本（已消毒） */}
+      {sanitizedAssistantHtml && (
+        <div className="msg-assistant rounded-md p-3 markdown-body animate-expand mb-2"
+          dangerouslySetInnerHTML={{ __html: sanitizedAssistantHtml }}
+        />
+      )}
+
+      {/* Tool calls / 工具调用 */}
+      {group.toolBlocks.map((block, i) => (
+        <ToolUseBlock key={`tool-${i}`} block={block} />
+      ))}
+
+      {/* Error results only / 只显示错误结果 */}
+      {group.resultBlocks.filter((b) => b.is_error).map((block, i) => (
+        <ToolResultBlock key={`err-${i}`} block={block} />
+      ))}
+    </div>
+  );
+}
+
+// --- Changes view / 变更视图 ---
+
+interface FileChange {
+  toolName: string;
+  filePath: string;
+  content: string;
+  timestamp: string;
+  isNew: boolean;
+}
+
+function extractFileChanges(messages: ParsedMessage[]): FileChange[] {
+  const changes: FileChange[] = [];
+
+  for (const msg of messages) {
+    if (msg.role !== 'assistant') continue;
+    for (const block of msg.content) {
+      if (block.type !== 'tool_use') continue;
+      const input = block.input || {};
+      const name = block.name || '';
+
+      // Write tool — file creation / Write 工具 — 文件创建
+      if (name === 'Write' || name === 'write') {
+        const filePath = (input.file_path as string) || (input.path as string) || '';
+        const content = (input.content as string) || '';
+        if (filePath) {
+          changes.push({
+            toolName: name,
+            filePath,
+            content: content.slice(0, 3000),
+            timestamp: msg.timestamp,
+            isNew: true,
+          });
+        }
+      }
+
+      // Edit tool — file modification / Edit 工具 — 文件修改
+      if (name === 'Edit' || name === 'edit' || name === 'MultiEdit') {
+        const filePath = (input.file_path as string) || (input.path as string) || '';
+        const oldStr = (input.old_string as string) || (input.old_str as string) || '';
+        const newStr = (input.new_string as string) || (input.new_str as string) || '';
+        if (filePath && (oldStr || newStr)) {
+          const oldLines = oldStr.split('\n').map((l: string) => `- ${l}`).join('\n');
+          const newLines = newStr.split('\n').map((l: string) => `+ ${l}`).join('\n');
+          const diffContent = `--- ${filePath}\n+++ ${filePath}\n\n${oldLines}\n${newLines}`;
+          changes.push({
+            toolName: name,
+            filePath,
+            content: diffContent.slice(0, 3000),
+            timestamp: msg.timestamp,
+            isNew: false,
+          });
+        }
+      }
+    }
+  }
+  return changes;
+}
+
+function FileChangeCard({ change, idx }: { change: FileChange; idx: number }) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(true);
+
+  const fileName = change.filePath.split('/').pop() || change.filePath;
+  const dirPath = change.filePath.replace(/\/[^/]+$/, '');
+
+  return (
+    <div className="change-card animate-fade-in" style={{ animationDelay: `${idx * 50}ms` }}>
+      <div
+        className="change-card-header cursor-pointer"
+        onClick={() => setExpanded(!expanded)}
+      >
+        {change.isNew ? (
+          <FilePlus size={14} style={{ color: 'var(--status-ok)' }} />
+        ) : (
+          <FileEdit size={14} style={{ color: 'var(--status-info)' }} />
+        )}
+        <span className="font-medium" style={{ color: 'var(--txt-1)' }}>{fileName}</span>
+        <span className="text-2xs truncate flex-1" style={{ color: 'var(--txt-3)' }}>{dirPath}</span>
+        <span className={`change-type-badge ${change.isNew ? 'change-type-write' : 'change-type-edit'}`}>
+          {change.isNew ? t('chat.file_created') : t('chat.file_modified')}
+        </span>
+        <span className="text-2xs" style={{ color: 'var(--txt-3)', fontFamily: 'JetBrains Mono, monospace' }}>
+          {change.timestamp ? new Date(change.timestamp).toLocaleTimeString() : ''}
+        </span>
+        <ChevronDown size={12} className="transition-transform duration-150" style={{ transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)', color: 'var(--txt-3)' }} />
+      </div>
+      {expanded && (
+        <div className="change-card-body">
+          {change.content.split('\n').map((line, i) => {
+            let lineColor = 'var(--txt-2)';
+            if (line.startsWith('+ ')) lineColor = 'var(--status-ok)';
+            else if (line.startsWith('- ')) lineColor = 'var(--status-err)';
+            else if (line.startsWith('---') || line.startsWith('+++')) lineColor = 'var(--txt-3)';
+
+            return (
+              <div key={i} style={{ color: lineColor }} className="whitespace-pre-wrap">
+                {line}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Main component / 主组件 ---
+
 export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<ParsedMessage[]>([]);
@@ -192,6 +433,7 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('full');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -206,7 +448,6 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
       .finally(() => setLoading(false));
   }, [projectId, sessionId]);
 
-  // Track scroll position for scroll-to-bottom button / 跟踪滚动位置
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
@@ -217,7 +458,6 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, []);
 
-  // Filter out empty system messages / 过滤空系统消息
   const visibleMessages = useMemo(
     () => messages.filter((m) => {
       if (m.role === 'system') return false;
@@ -225,6 +465,38 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
     }),
     [messages]
   );
+
+  // Filter genuine user input: exclude tool_result blocks, system-injected XML tags
+  // 过滤真实用户输入：排除 tool_result 块、系统注入的 XML 标签
+  const userMessages = useMemo(() => visibleMessages.filter((m) => {
+    if (m.role !== 'user') return false;
+    // Must have at least one text block / 必须有至少一个文本块
+    const textBlocks = m.content.filter((b) => b.type === 'text' && b.text);
+    if (textBlocks.length === 0) return false;
+    // If ALL content is tool_result, it's a tool response / 如果全部是 tool_result，是工具返回
+    const hasOnlyToolResults = m.content.every((b) => b.type === 'tool_result');
+    if (hasOnlyToolResults) return false;
+    // Check if text is system-injected XML / 检查文本是否为系统注入的 XML
+    const firstText = (textBlocks[0].text || '').trim();
+    const systemPrefixes = [
+      '<bash-input>', '<bash-stdout>', '<bash-stderr>',
+      '<command-message>', '<command-name>', '<command-args>',
+      '<local-command-caveat>', '<local-command-stdout>',
+      '<task-notification>', '<system-reminder>',
+      '<user-prompt-submit-hook>',
+    ];
+    if (systemPrefixes.some((p) => firstText.startsWith(p))) return false;
+    return true;
+  }), [visibleMessages]);
+  const compactGroups = useMemo(() => buildCompactGroups(visibleMessages), [visibleMessages]);
+  const fileChanges = useMemo(() => extractFileChanges(messages), [messages]);
+
+  const viewModes: { id: ViewMode; icon: React.ReactNode; label: string; count?: number }[] = [
+    { id: 'full', icon: <Layers size={12} />, label: t('chat.view_full') },
+    { id: 'dialog', icon: <MessageSquare size={12} />, label: t('chat.view_dialog'), count: userMessages.length },
+    { id: 'compact', icon: <Zap size={12} />, label: t('chat.view_compact'), count: compactGroups.length },
+    { id: 'changes', icon: <FileCode size={12} />, label: t('chat.view_changes'), count: fileChanges.length },
+  ];
 
   return (
     <div className="flex flex-col h-full relative">
@@ -251,7 +523,7 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
         </div>
         <a
           href="#audit"
-          onClick={(e) => { e.preventDefault(); /* navigate to audit view */ }}
+          onClick={(e) => { e.preventDefault(); }}
           className="btn btn-ghost text-2xs"
         >
           <Shield size={14} />
@@ -259,7 +531,37 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
         </a>
       </div>
 
-      {/* Messages / 消息列表 */}
+      {/* View mode tabs / 视图模式标签 */}
+      <div
+        className="flex items-center gap-1 px-4 py-2 border-b"
+        style={{ borderColor: 'var(--border-default)', background: 'var(--surface-0)' }}
+      >
+        {viewModes.map((mode) => (
+          <button
+            key={mode.id}
+            onClick={() => setViewMode(mode.id)}
+            className={`view-tab ${viewMode === mode.id ? 'active' : ''}`}
+          >
+            {mode.icon}
+            <span>{mode.label}</span>
+            {mode.count != null && (
+              <span
+                className="text-2xs px-1 rounded"
+                style={{
+                  background: viewMode === mode.id ? 'var(--accent)' : 'var(--surface-2)',
+                  color: viewMode === mode.id ? '#fff' : 'var(--txt-3)',
+                  fontSize: '0.6rem',
+                  fontFamily: 'JetBrains Mono, monospace',
+                }}
+              >
+                {mode.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Content area / 内容区域 */}
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 space-y-5 relative">
         {loading && (
           <div className="space-y-4">
@@ -279,21 +581,116 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
           </div>
         )}
 
-        {!loading && !error && visibleMessages.length === 0 && (
-          <div className="empty-state">
-            <div className="empty-state-icon">
-              <Bot size={28} />
-            </div>
-            <p className="text-sm">{t('chat.no_messages')}</p>
-          </div>
+        {/* Full view / 完整视图 */}
+        {!loading && !error && viewMode === 'full' && (
+          <>
+            {visibleMessages.length === 0 && (
+              <div className="empty-state">
+                <div className="empty-state-icon"><Bot size={28} /></div>
+                <p className="text-sm">{t('chat.no_messages')}</p>
+              </div>
+            )}
+            {visibleMessages.map((msg, idx) => (
+              <div key={msg.uuid}>
+                {idx > 0 && msg.role === 'user' && <div className="msg-divider" />}
+                <MessageBubble message={msg} />
+              </div>
+            ))}
+          </>
         )}
 
-        {visibleMessages.map((msg, idx) => (
-          <div key={msg.uuid}>
-            {idx > 0 && msg.role === 'user' && <div className="msg-divider" />}
-            <MessageBubble message={msg} />
-          </div>
-        ))}
+        {/* Dialog view (user input only) / 对话视图（仅用户输入） */}
+        {!loading && !error && viewMode === 'dialog' && (
+          <>
+            {userMessages.length === 0 && (
+              <div className="empty-state">
+                <div className="empty-state-icon"><User size={28} /></div>
+                <p className="text-sm">{t('chat.no_messages')}</p>
+              </div>
+            )}
+            {userMessages.map((msg, idx) => {
+              const userText = msg.content
+                .filter((b): b is ContentBlock & { type: 'text' } => b.type === 'text')
+                .map((b) => b.text || '')
+                .join('\n');
+              const sanitizedHtml = userText ? renderMarkdown(userText) : '';
+
+              return (
+                <div key={msg.uuid} className="animate-fade-in" style={{ animationDelay: `${idx * 40}ms` }}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <User size={14} style={{ color: 'var(--status-info)' }} />
+                    <span
+                      className="text-2xs font-medium px-1.5 py-0.5 rounded"
+                      style={{ background: 'var(--surface-2)', color: 'var(--txt-3)', fontFamily: 'JetBrains Mono, monospace' }}
+                    >
+                      #{idx + 1}
+                    </span>
+                    <span className="text-2xs" style={{ color: 'var(--txt-3)' }}>
+                      {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ''}
+                    </span>
+                  </div>
+                  {sanitizedHtml && (
+                    <div
+                      className="msg-user rounded-md p-3 markdown-body"
+                      dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+                    />
+                  )}
+                  {idx < userMessages.length - 1 && <div className="msg-divider" />}
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {/* Compact view / 精简视图 */}
+        {!loading && !error && viewMode === 'compact' && (
+          <>
+            {compactGroups.length === 0 && (
+              <div className="empty-state">
+                <div className="empty-state-icon"><Zap size={28} /></div>
+                <p className="text-sm">{t('chat.no_commands_compact')}</p>
+              </div>
+            )}
+            {compactGroups.map((group, idx) => (
+              <div key={group.userMessage.uuid}>
+                {idx > 0 && <div className="msg-divider" />}
+                <CompactGroupView group={group} idx={idx} />
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* Changes view / 变更视图 */}
+        {!loading && !error && viewMode === 'changes' && (
+          <>
+            {fileChanges.length === 0 && (
+              <div className="empty-state">
+                <div className="empty-state-icon"><FileCode size={28} /></div>
+                <p className="text-sm">{t('chat.no_changes')}</p>
+              </div>
+            )}
+            {fileChanges.length > 0 && (
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                <span className="text-2xs font-medium" style={{ color: 'var(--txt-2)' }}>
+                  {fileChanges.length} changes
+                </span>
+                <span className="change-type-badge change-type-write">
+                  <FilePlus size={10} className="mr-1" />
+                  {fileChanges.filter((c) => c.isNew).length} created
+                </span>
+                <span className="change-type-badge change-type-edit">
+                  <FileEdit size={10} className="mr-1" />
+                  {fileChanges.filter((c) => !c.isNew).length} modified
+                </span>
+              </div>
+            )}
+            <div className="space-y-3">
+              {fileChanges.map((change, idx) => (
+                <FileChangeCard key={`${change.filePath}-${idx}`} change={change} idx={idx} />
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Scroll to bottom / 滚到底部 */}
