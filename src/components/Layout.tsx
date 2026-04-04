@@ -222,6 +222,7 @@ export default function Layout({ onLogout }: LayoutProps) {
               projectId={selectedSession.projectId}
               sessionId={selectedSession.sessionId}
               onBack={() => setSelectedSession(null)}
+              onViewAudit={() => setView('audit')}
             />
           )}
           {view === 'search' && (
@@ -234,8 +235,14 @@ export default function Layout({ onLogout }: LayoutProps) {
             />
           )}
           {view === 'audit' && !selectedSession && (
-            <div className="flex items-center justify-center h-full" style={{ color: 'var(--txt-3)' }}>
-              <p className="text-sm">{t('sessions.no_sessions')}</p>
+            <div className="empty-state h-full">
+              <div className="empty-state-icon">
+                <Shield size={28} />
+              </div>
+              <p className="text-sm">{t('audit.title')}</p>
+              <p className="text-2xs mt-1" style={{ color: 'var(--txt-3)' }}>
+                Select a session first, then click "View Commands"
+              </p>
             </div>
           )}
           {view === 'trash' && (

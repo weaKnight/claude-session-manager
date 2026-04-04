@@ -23,17 +23,29 @@ interface Props {
   projectId: string;
   sessionId: string;
   onBack: () => void;
+  onViewAudit?: () => void;
 }
 
 // Configure marked for safe rendering / 配置 marked 安全渲染
 marked.setOptions({ gfm: true, breaks: true });
 
+// Markdown render cache to avoid re-parsing on each render / Markdown 缓存避免重复解析
+const mdCache = new Map<string, string>();
 function renderMarkdown(text: string): string {
+  const cached = mdCache.get(text);
+  if (cached) return cached;
   // All HTML is sanitized via DOMPurify to prevent XSS
   // 所有 HTML 通过 DOMPurify 消毒以防止 XSS
   const raw = marked.parse(text) as string;
-  return DOMPurify.sanitize(raw);
+  const result = DOMPurify.sanitize(raw);
+  // Cap cache size to prevent memory leaks / 限制缓存大小防止内存泄漏
+  if (mdCache.size > 2000) mdCache.clear();
+  mdCache.set(text, result);
+  return result;
 }
+
+// Page size for progressive rendering / 渐进渲染每页大小
+const PAGE_SIZE = 50;
 
 // --- Shared sub-components / 共享子组件 ---
 
@@ -136,7 +148,7 @@ function MessageBubble({ message }: { message: ParsedMessage }) {
   const sanitizedHtml = textContent ? renderMarkdown(textContent) : '';
 
   return (
-    <div className="animate-fade-in">
+    <div>
       {/* Role header / 角色标头 */}
       <div className="flex items-center gap-2 mb-1.5">
         {isUser ? (
@@ -426,7 +438,7 @@ function FileChangeCard({ change, idx }: { change: FileChange; idx: number }) {
 
 // --- Main component / 主组件 ---
 
-export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
+export default function ChatViewer({ projectId, sessionId, onBack, onViewAudit }: Props) {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<ParsedMessage[]>([]);
   const [meta, setMeta] = useState<Record<string, unknown> | null>(null);
@@ -434,11 +446,13 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('full');
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
+    setDisplayCount(PAGE_SIZE);
     sessionsApi.get(projectId, sessionId)
       .then((data) => {
         setMessages(data.messages);
@@ -521,14 +535,13 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
             )}
           </p>
         </div>
-        <a
-          href="#audit"
-          onClick={(e) => { e.preventDefault(); }}
+        <button
+          onClick={() => onViewAudit?.()}
           className="btn btn-ghost text-2xs"
         >
           <Shield size={14} />
           {t('sessions.view_commands')}
-        </a>
+        </button>
       </div>
 
       {/* View mode tabs / 视图模式标签 */}
@@ -539,7 +552,7 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
         {viewModes.map((mode) => (
           <button
             key={mode.id}
-            onClick={() => setViewMode(mode.id)}
+            onClick={() => { setViewMode(mode.id); setDisplayCount(PAGE_SIZE); }}
             className={`view-tab ${viewMode === mode.id ? 'active' : ''}`}
           >
             {mode.icon}
@@ -581,7 +594,7 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
           </div>
         )}
 
-        {/* Full view / 完整视图 */}
+        {/* Full view (paginated) / 完整视图（分页渲染） */}
         {!loading && !error && viewMode === 'full' && (
           <>
             {visibleMessages.length === 0 && (
@@ -590,12 +603,21 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
                 <p className="text-sm">{t('chat.no_messages')}</p>
               </div>
             )}
-            {visibleMessages.map((msg, idx) => (
+            {visibleMessages.slice(0, displayCount).map((msg, idx) => (
               <div key={msg.uuid}>
                 {idx > 0 && msg.role === 'user' && <div className="msg-divider" />}
                 <MessageBubble message={msg} />
               </div>
             ))}
+            {visibleMessages.length > displayCount && (
+              <button
+                onClick={() => setDisplayCount((c) => c + PAGE_SIZE)}
+                className="btn btn-ghost w-full py-3 text-sm"
+                style={{ color: 'var(--accent)' }}
+              >
+                Load more ({visibleMessages.length - displayCount} remaining)
+              </button>
+            )}
           </>
         )}
 
@@ -651,12 +673,21 @@ export default function ChatViewer({ projectId, sessionId, onBack }: Props) {
                 <p className="text-sm">{t('chat.no_commands_compact')}</p>
               </div>
             )}
-            {compactGroups.map((group, idx) => (
+            {compactGroups.slice(0, displayCount).map((group, idx) => (
               <div key={group.userMessage.uuid}>
                 {idx > 0 && <div className="msg-divider" />}
                 <CompactGroupView group={group} idx={idx} />
               </div>
             ))}
+            {compactGroups.length > displayCount && (
+              <button
+                onClick={() => setDisplayCount((c) => c + PAGE_SIZE)}
+                className="btn btn-ghost w-full py-3 text-sm"
+                style={{ color: 'var(--accent)' }}
+              >
+                Load more ({compactGroups.length - displayCount} remaining)
+              </button>
+            )}
           </>
         )}
 
