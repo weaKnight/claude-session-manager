@@ -12,15 +12,30 @@ Claude Code stores all conversations as JSONL files in `~/.claude/projects/`. Th
 
 ## Features
 
-- **Web UI** — Browse projects, sessions, and messages from any browser
-- **Full-text Search** — In-memory indexing across all conversations
-- **Command Audit** — Dedicated panel showing every `Bash`, `Write`, `Edit` command Claude executed
-- **Live Updates** — SSE-powered real-time refresh when sessions change
-- **Authentication** — JWT + bcrypt password protection with brute-force lockout
-- **Session Management** — Soft-delete (trash) and hard-delete with confirmation
-- **Bilingual** — English and Chinese UI with one-click toggle
-- **Dark Mode** — Automatic detection with manual override
-- **Read-Only Mode** — Optional flag to prevent any modifications
+### Browse & Read
+- **Premium Web UI** — Generous spacing, gradient brand accents, JetBrains Mono code, dark mode with auto-detection
+- **4 Chat View Modes** — Switch between **Full** (everything), **Dialog** (user + assistant only), **Compact** (user prompts + commands), and **Changes** (file diffs only)
+- **Markdown Rendering** — GitHub-flavored Markdown with syntax-highlighted code blocks, sanitized via DOMPurify
+- **Tool Use Inspection** — Expandable `Bash`, `Edit`, `Write`, `Read` blocks with input/output preview
+- **Sub-Agent Support** — Detects and labels `agent-*.jsonl` sessions with a dedicated badge
+- **Progressive Rendering** — Pages large sessions (50 messages at a time) for snappy loading
+
+### Search & Audit
+- **Full-text Search** — MiniSearch in-memory index across every conversation, with highlighted snippets
+- **Command Audit Panel** — Chronological timeline of every tool call (`Bash`, `Write`, `Edit`, `Read`, `Glob`, `Grep`...) with per-tool filtering, error counts, and expandable input/output
+- **Executive Dashboard** — Stats view with KPI cards (projects, sessions, messages) and a top-projects breakdown chart
+
+### Live & Safe
+- **Live Updates** — SSE-powered real-time refresh when JSONL files change on disk (chokidar watcher)
+- **Authentication** — JWT + bcrypt (12 rounds) password protection, 5-failure lockout, configurable token expiry
+- **Soft-Delete + Trash** — Deleted sessions move to `~/.claude-session-manager/trash/` and can be restored or permanently purged
+- **Read-Only Data Access** — `~/.claude` is **never** written to; all delete operations target the trash directory
+- **Path Traversal Protection** — Strict whitelist validation on every project/session ID
+
+### UX
+- **Bilingual UI** — English / 中文 one-click toggle (i18next)
+- **Dark Mode** — System-preference detection with manual override
+- **Read-Only Mode** — `--read-only true` flag to disable all delete operations (recommended for shared deployments)
 - **Docker Ready** — One-command deployment with `docker compose up`
 
 ## Quick Start
@@ -45,7 +60,54 @@ cd claude-session-manager
 docker compose up -d
 ```
 
-### Option 3: systemd Service
+> **Docker is read-only by default.** The container mounts your host `~/.claude` directory **read-only** for safety, so delete and trash operations are disabled inside Docker — you can browse, search, and audit, but not modify. To enable write operations, edit `docker-compose.yml` and remove the `:ro` suffix from the volume mount, then restart with `docker compose up -d --force-recreate`. The host `~/.claude` data is never modified by the app even with writes enabled — only the trash directory under `~/.claude-session-manager/` is touched.
+
+### Option 3: PM2 (Recommended for non-Docker hosts)
+
+[PM2](https://pm2.keymetrics.io/) is the simplest way to keep the server running, restart it on crashes, and bring it back automatically after a reboot. An `ecosystem.config.cjs` ships in the repo root.
+
+```bash
+# 1. Install PM2 globally (one time)
+npm install -g pm2
+
+# 2. Build the app
+npm run build
+
+# 3. Start under PM2
+pm2 start ecosystem.config.cjs
+
+# 4. Persist the process list and enable boot autostart
+pm2 save
+pm2 startup           # follow the printed sudo command
+```
+
+After this, the server will start automatically on every reboot.
+
+**Common PM2 commands:**
+
+```bash
+pm2 status            # Show all managed processes
+pm2 logs csm          # Tail combined logs (Ctrl+C to exit)
+pm2 logs csm --err    # Errors only
+pm2 restart csm       # Restart after a build
+pm2 reload csm        # Zero-downtime reload
+pm2 stop csm          # Stop without removing
+pm2 delete csm        # Remove from PM2 entirely
+pm2 monit             # Live CPU/memory dashboard
+```
+
+**Updating to a new version:**
+
+```bash
+git pull
+npm install
+npm run build
+pm2 reload csm        # Or: pm2 restart csm
+```
+
+To customize port, host, JWT secret, or read-only mode, edit the `env` block in `ecosystem.config.cjs` and run `pm2 reload csm`.
+
+### Option 4: systemd Service
 
 ```bash
 npm run build
@@ -87,9 +149,12 @@ All endpoints (except `/api/v1/auth/*`) require `Authorization: Bearer <token>`.
 | GET | `/api/v1/projects` | List all projects |
 | GET | `/api/v1/projects/:id/sessions` | List sessions for a project |
 | GET | `/api/v1/sessions/:pid/:sid` | Get full session with messages |
-| GET | `/api/v1/sessions/:pid/:sid/commands` | Get audit commands |
-| DELETE | `/api/v1/sessions/:pid/:sid` | Soft-delete session |
-| DELETE | `/api/v1/sessions/:pid/:sid?force=true` | Hard-delete session |
+| GET | `/api/v1/sessions/:pid/:sid/commands` | Get audit commands (Bash/Edit/Write...) |
+| DELETE | `/api/v1/sessions/:pid/:sid` | Soft-delete session (move to trash) |
+| DELETE | `/api/v1/sessions/:pid/:sid?force=true` | Hard-delete session (skip trash) |
+| GET | `/api/v1/trash` | List soft-deleted sessions |
+| POST | `/api/v1/trash/:fileName/restore` | Restore a session from trash |
+| DELETE | `/api/v1/trash` | Empty the trash permanently |
 | GET | `/api/v1/search?q=query` | Full-text search |
 | GET | `/api/v1/events` | SSE live updates |
 | GET | `/api/v1/stats` | Usage statistics |

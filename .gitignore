@@ -5,6 +5,19 @@ dist/
 .DS_Store
 *.local
 
+# PM2 logs / PM2 日志
+logs/
+
+# Claude Code local settings / Claude Code 本地设置
+.claude/
+
 # App data (contains password hash)
 # 应用数据（包含密码哈希）
 .claude-session-manager/
+
+# Playwright / E2E test artifacts
+# Playwright / E2E 测试产物
+/playwright-report/
+/test-results/
+/tests/fixtures/home/
+/tests/fixtures/.auth/
