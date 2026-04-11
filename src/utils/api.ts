@@ -49,8 +49,12 @@ async function request<T>(
     headers,
   });
 
-  // Handle auth errors / 处理认证错误
-  if (res.status === 401) {
+  // Handle auth errors on protected endpoints only.
+  // For /auth/login and /auth/setup, a 401 is a legitimate "wrong password"
+  // response that the caller must surface to the user — don't reload the page.
+  // 仅对受保护端点的 401 做跳转；登录/设置接口的 401 表示密码错误，交给调用方处理。
+  const isAuthEndpoint = path.startsWith('/auth/');
+  if (res.status === 401 && !isAuthEndpoint) {
     clearToken();
     window.location.href = '/login';
     throw new Error('Unauthorized');

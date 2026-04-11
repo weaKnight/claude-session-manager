@@ -4,7 +4,7 @@
  * 扫描 ~/.claude/projects/ 并提供会话 CRUD 操作
  */
 
-import { readdirSync, existsSync, renameSync, unlinkSync, statSync } from 'fs';
+import { readdirSync, existsSync, renameSync, unlinkSync, statSync, copyFileSync } from 'fs';
 import { join, basename } from 'path';
 import { config } from '../utils/config.js';
 import { logger } from '../utils/logger.js';
@@ -170,7 +170,22 @@ export function softDeleteSession(projectId: string, sessionId: string): { succe
 
   const trashPath = join(config.trashDir, `${projectId}__${sessionId}__${Date.now()}.jsonl`);
   try {
-    renameSync(filePath, trashPath);
+    // Try rename first (same filesystem), fall back to copy (cross-fs or read-only source)
+    // 先尝试 rename（同文件系统），失败则 copy（跨文件系统或只读源）
+    try {
+      renameSync(filePath, trashPath);
+    } catch {
+      // Cross-filesystem or read-only mount: copy to trash, then try to remove source
+      // 跨文件系统或只读挂载：复制到回收站，再尝试删除源文件
+      copyFileSync(filePath, trashPath);
+      try {
+        unlinkSync(filePath);
+      } catch {
+        // Source is read-only (e.g. Docker :ro mount) — file stays but is tracked in trash
+        // 源为只读（如 Docker :ro 挂载）— 文件保留但已记录在回收站
+        logger.info(`Source is read-only, session copied to trash but original preserved: ${sessionId}`);
+      }
+    }
     metaCache.delete(filePath);
     logger.info(`Session soft-deleted: ${sessionId} -> trash`);
     return { success: true };
@@ -202,8 +217,9 @@ export function hardDeleteSession(projectId: string, sessionId: string): { succe
     logger.info(`Session permanently deleted: ${sessionId}`);
     return { success: true };
   } catch (err) {
-    logger.error(`Failed to hard-delete session: ${err}`);
-    return { success: false, error: 'Delete failed / 删除失败' };
+    // Read-only mount: cannot delete source file / 只读挂载：无法删除源文件
+    logger.error(`Failed to hard-delete session (source may be read-only): ${err}`);
+    return { success: false, error: 'Cannot delete: source is read-only / 无法删除：源文件只读' };
   }
 }
 

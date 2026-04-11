@@ -13,7 +13,10 @@
     "start": "node dist/server/index.js",
     "preview": "npm run build && npm start",
     "lint": "eslint . --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "NO_PROXY=localhost,127.0.0.1 HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= playwright test",
+    "test:e2e:ui": "NO_PROXY=localhost,127.0.0.1 HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= playwright test --ui",
+    "test:e2e:headed": "NO_PROXY=localhost,127.0.0.1 HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= playwright test --headed"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -25,11 +28,12 @@
     "express-rate-limit": "^7.4.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
-    "minisearch": "^7.1.0",
     "marked": "^14.1.0",
+    "minisearch": "^7.1.0",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.7.5",
     "@types/cors": "^2.8.17",
