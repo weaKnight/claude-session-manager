@@ -107,7 +107,56 @@ pm2 reload csm        # Or: pm2 restart csm
 
 To customize port, host, JWT secret, or read-only mode, edit the `env` block in `ecosystem.config.cjs` and run `pm2 reload csm`.
 
-### Option 4: systemd Service
+### Option 4: Pre-built Binary (no Node required)
+
+For users who don't want to install Node.js, you can ship a single executable per platform built with [Bun](https://bun.sh/). The binary embeds the Node-compatible runtime; you only need the executable plus a `dist/client/` folder next to it.
+
+**Build all 5 platforms** (requires Bun ≥ 1.1 on the build host — the Bun toolchain handles cross-compilation):
+
+```bash
+npm install -g bun           # one-time
+npm run build:binaries       # builds linux x64/arm64, darwin x64/arm64, windows x64
+```
+
+Output goes to `release/`:
+
+```
+release/
+├── csm-linux-x64.tar.gz       (~38 MB)
+├── csm-linux-arm64.tar.gz     (~38 MB)
+├── csm-darwin-x64.tar.gz      (~24 MB)
+├── csm-darwin-arm64.tar.gz    (~22 MB)
+└── csm-windows-x64.zip        (~40 MB)
+```
+
+Each archive contains:
+
+```
+csm-{os}-{arch}/
+├── csm[.exe]        single executable (~60–110 MB uncompressed)
+├── dist/client/     bundled SPA assets
+└── README.txt
+```
+
+**To run on a target machine:**
+
+```bash
+tar -xzf csm-linux-x64.tar.gz
+cd csm-linux-x64
+./csm                              # or: ./csm --port 8080 --read-only true
+```
+
+Then open `http://your-server:3727` and set your password on first visit.
+
+**Build a single platform:**
+
+```bash
+npm run build:binaries -- linux-arm64    # or darwin-arm64, windows-x64, etc.
+```
+
+> **Note**: The binary expects `dist/client/` next to it. If you want to relocate the SPA, set `CSM_CLIENT_DIST=/abs/path/to/client` before launching. The same `--port`, `--host`, `--claude-dir`, `--read-only` flags from npm-mode all work.
+
+### Option 5: systemd Service
 
 ```bash
 npm run build

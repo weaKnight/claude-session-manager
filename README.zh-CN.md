@@ -107,7 +107,56 @@ pm2 reload csm        # 或：pm2 restart csm
 
 如需自定义端口、主机、JWT secret 或只读模式，编辑 `ecosystem.config.cjs` 中的 `env` 块，然后执行 `pm2 reload csm`。
 
-### 方式四：systemd 服务
+### 方式四：预编译二进制（无需 Node）
+
+适合不想装 Node.js 的用户。使用 [Bun](https://bun.sh/) 跨平台编译，每个平台产出单文件可执行程序，二进制内已嵌入 Node 兼容运行时；运行时只需可执行文件 + 同目录的 `dist/client/`。
+
+**构建全部 5 个平台**（构建机需 Bun ≥ 1.1，Bun 自带跨平台编译能力）：
+
+```bash
+npm install -g bun           # 一次性安装
+npm run build:binaries       # 构建 linux x64/arm64、darwin x64/arm64、windows x64
+```
+
+产物在 `release/` 目录：
+
+```
+release/
+├── csm-linux-x64.tar.gz       (~38 MB)
+├── csm-linux-arm64.tar.gz     (~38 MB)
+├── csm-darwin-x64.tar.gz      (~24 MB)
+├── csm-darwin-arm64.tar.gz    (~22 MB)
+└── csm-windows-x64.zip        (~40 MB)
+```
+
+每个压缩包内的结构：
+
+```
+csm-{os}-{arch}/
+├── csm[.exe]        可执行文件（解压后 60–110 MB）
+├── dist/client/     打包后的 SPA 静态资源
+└── README.txt
+```
+
+**目标机器上运行：**
+
+```bash
+tar -xzf csm-linux-x64.tar.gz
+cd csm-linux-x64
+./csm                              # 或：./csm --port 8080 --read-only true
+```
+
+然后浏览器访问 `http://your-server:3727`，首次访问时设置密码。
+
+**只构建单个平台：**
+
+```bash
+npm run build:binaries -- linux-arm64    # 或 darwin-arm64、windows-x64 等
+```
+
+> **说明**：二进制默认读取同级目录的 `dist/client/`。如需指定其他位置，启动前设置 `CSM_CLIENT_DIST=/绝对/路径/到/client` 即可。`--port`、`--host`、`--claude-dir`、`--read-only` 等参数与 npm 启动方式完全一致。
+
+### 方式五：systemd 服务
 
 ```bash
 npm run build

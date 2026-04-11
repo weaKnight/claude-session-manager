@@ -5,7 +5,7 @@
  */
 
 import { existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { homedir } from 'os';
 
 // Parse CLI arguments / 解析命令行参数
@@ -24,6 +24,28 @@ function parseArgs(): Record<string, string> {
 }
 
 const cliArgs = parseArgs();
+
+// Resolve frontend dist path / 解析前端构建目录
+// Tries (in order): explicit env override, alongside binary, alongside binary (flat),
+// then cwd-relative for `npm start`. Lets the same code run as a Bun-compiled
+// single binary or under regular Node.
+// 优先级：显式环境变量 > 二进制同级 > 当前工作目录（npm start 模式）
+function resolveClientDistPath(): string {
+  const binDir = dirname(process.execPath);
+  const candidates = [
+    process.env['CSM_CLIENT_DIST'],
+    join(binDir, 'dist', 'client'),
+    join(binDir, 'client'),
+    join(process.cwd(), 'dist', 'client'),
+  ].filter((p): p is string => typeof p === 'string' && p.length > 0);
+
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  // Fall back to cwd-relative even if missing — server logs a warning later
+  // 即使不存在也回退到 cwd 相对路径，server 启动时会打印警告
+  return join(process.cwd(), 'dist', 'client');
+}
 
 // Default Claude data directory / 默认 Claude 数据目录
 const defaultClaudeDir = join(homedir(), '.claude');
@@ -58,7 +80,7 @@ export const config = {
   readOnly: cliArgs['read-only'] === 'true' || process.env['CSM_READ_ONLY'] === 'true',
 
   // Client build path / 前端构建路径
-  clientDistPath: join(process.cwd(), 'dist', 'client'),
+  clientDistPath: resolveClientDistPath(),
 } as const;
 
 // Ensure trash directory exists / 确保回收站目录存在

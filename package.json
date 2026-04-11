@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "NO_PROXY=localhost,127.0.0.1 HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= playwright test",
     "test:e2e:ui": "NO_PROXY=localhost,127.0.0.1 HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= playwright test --ui",
-    "test:e2e:headed": "NO_PROXY=localhost,127.0.0.1 HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= playwright test --headed"
+    "test:e2e:headed": "NO_PROXY=localhost,127.0.0.1 HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= playwright test --headed",
+    "build:binaries": "bash scripts/build-binaries.sh"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -8,6 +8,10 @@ dist/
 # PM2 logs / PM2 日志
 logs/
 
+# Cross-platform release binaries (built by scripts/build-binaries.sh)
+# 跨平台二进制发布产物
+release/
+
 # Claude Code local settings / Claude Code 本地设置
 .claude/
 
