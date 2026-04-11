@@ -513,45 +513,49 @@ export default function ChatViewer({ projectId, sessionId, onBack, onViewAudit }
   ];
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div data-testid="chat-viewer" className="flex flex-col h-full relative">
       {/* Header bar / 头部栏 */}
       <div
-        className="flex items-center gap-3 px-4 py-3 border-b"
+        className="flex items-center gap-4 px-8 py-5 border-b"
         style={{ borderColor: 'var(--border-default)', background: 'var(--surface-0)' }}
       >
-        <button onClick={onBack} className="btn btn-ghost p-1.5">
-          <ArrowLeft size={16} />
+        <button data-testid="chat-back" onClick={onBack} className="btn btn-ghost !p-2.5">
+          <ArrowLeft size={18} />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate" style={{ color: 'var(--txt-1)' }}>
+          <h2 className="text-[17px] font-bold truncate leading-tight" style={{ color: 'var(--txt-1)', letterSpacing: '-0.018em' }}>
             {(meta as Record<string, unknown>)?.summary as string || sessionId}
-          </p>
-          <p className="text-2xs" style={{ color: 'var(--txt-3)' }}>
-            {visibleMessages.length} {t('sessions.messages')}
+          </h2>
+          <div className="flex items-center gap-3 mt-1">
+            <span className="text-[12px] font-medium" style={{ color: 'var(--txt-3)' }}>
+              {visibleMessages.length} {t('sessions.messages')}
+            </span>
             {(meta as Record<string, unknown>)?.gitBranch && (
-              <span className="ml-2">
-                {t('sessions.branch')}: {(meta as Record<string, unknown>).gitBranch as string}
+              <span className="text-[12px] font-medium font-mono px-2 py-0.5 rounded" style={{ background: 'var(--surface-2)', color: 'var(--txt-2)' }}>
+                {(meta as Record<string, unknown>).gitBranch as string}
               </span>
             )}
-          </p>
+          </div>
         </div>
         <button
           onClick={() => onViewAudit?.()}
-          className="btn btn-ghost text-2xs"
+          className="btn btn-ghost !text-[13px] !font-semibold"
         >
-          <Shield size={14} />
+          <Shield size={16} />
           {t('sessions.view_commands')}
         </button>
       </div>
 
       {/* View mode tabs / 视图模式标签 */}
       <div
-        className="flex items-center gap-1 px-4 py-2 border-b"
+        className="flex items-center gap-1.5 px-8 py-3 border-b"
         style={{ borderColor: 'var(--border-default)', background: 'var(--surface-0)' }}
       >
         {viewModes.map((mode) => (
           <button
             key={mode.id}
+            data-testid={`view-tab-${mode.id}`}
+            data-active={viewMode === mode.id ? 'true' : 'false'}
             onClick={() => { setViewMode(mode.id); setDisplayCount(PAGE_SIZE); }}
             className={`view-tab ${viewMode === mode.id ? 'active' : ''}`}
           >
@@ -559,12 +563,13 @@ export default function ChatViewer({ projectId, sessionId, onBack, onViewAudit }
             <span>{mode.label}</span>
             {mode.count != null && (
               <span
-                className="text-2xs px-1 rounded"
+                className="px-1.5 rounded"
                 style={{
                   background: viewMode === mode.id ? 'var(--accent)' : 'var(--surface-2)',
                   color: viewMode === mode.id ? '#fff' : 'var(--txt-3)',
-                  fontSize: '0.6rem',
+                  fontSize: '0.65rem',
                   fontFamily: 'JetBrains Mono, monospace',
+                  fontWeight: 700,
                 }}
               >
                 {mode.count}
@@ -575,7 +580,7 @@ export default function ChatViewer({ projectId, sessionId, onBack, onViewAudit }
       </div>
 
       {/* Content area / 内容区域 */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 space-y-5 relative">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-8 py-6 space-y-5 relative">
         {loading && (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (

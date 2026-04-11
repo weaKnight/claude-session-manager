@@ -73,21 +73,23 @@ export default function TrashPanel() {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-medium" style={{ color: 'var(--txt-1)' }}>
-          {t('trash.title')}
-          <span className="text-sm font-normal ml-2" style={{ color: 'var(--txt-3)' }}>
-            ({items.length})
-          </span>
-        </h2>
+    <div className="h-full overflow-y-auto px-10 pt-10 pb-6 max-w-6xl mx-auto w-full">
+      <div className="flex items-end justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-4xl font-bold tracking-tight" style={{ color: 'var(--txt-1)', letterSpacing: '-0.035em' }}>
+            {t('trash.title')}
+          </h1>
+          <p className="text-[15px] mt-1.5" style={{ color: 'var(--txt-2)' }}>
+            {items.length} deleted {items.length === 1 ? 'session' : 'sessions'} — restorable until purged
+          </p>
+        </div>
         {items.length > 0 && (
           <button
             onClick={handleEmpty}
-            className="btn btn-ghost text-xs flex items-center gap-1.5 px-3 py-1.5"
-            style={{ color: 'var(--status-error)' }}
+            className="btn btn-ghost !text-[13px] !font-semibold"
+            style={{ color: 'var(--status-err)' }}
           >
-            <AlertTriangle size={14} />
+            <AlertTriangle size={16} />
             {t('trash.empty')}
           </button>
         )}
@@ -96,40 +98,40 @@ export default function TrashPanel() {
       {items.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">
-            <Trash2 size={28} />
+            <Trash2 size={32} />
           </div>
-          <p className="text-sm">{t('trash.no_items')}</p>
-          <p className="text-2xs mt-1" style={{ color: 'var(--txt-3)' }}>
+          <p className="text-[15px] mt-2">{t('trash.no_items')}</p>
+          <p className="text-[12px] mt-1" style={{ color: 'var(--txt-3)' }}>
             Deleted sessions will appear here
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {items.map((item, idx) => (
             <div
               key={item.fileName}
-              className="group card p-4 animate-fade-in"
+              className="group card p-5 animate-fade-in"
               style={{ animationDelay: `${idx * 40}ms` }}
             >
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate" style={{ color: 'var(--txt-1)' }}>
+                  <p className="text-[15px] font-semibold truncate" style={{ color: 'var(--txt-1)', letterSpacing: '-0.012em' }}>
                     {item.sessionId}
                   </p>
-                  <div className="flex items-center gap-3 mt-1 text-2xs" style={{ color: 'var(--txt-3)' }}>
-                    <span className="font-medium" style={{ color: 'var(--txt-2)' }}>{item.projectId}</span>
+                  <div className="flex items-center gap-3 mt-2 text-[12px] font-medium" style={{ color: 'var(--txt-3)' }}>
+                    <span className="font-semibold" style={{ color: 'var(--txt-2)' }}>{item.projectId}</span>
                     <span>{formatDeletedAt(item.deletedAt)}</span>
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{formatSize(item.fileSize)}</span>
+                    <span className="px-2 py-0.5 rounded font-bold" style={{ background: 'var(--surface-2)', color: 'var(--txt-2)', fontFamily: 'JetBrains Mono, monospace' }}>{formatSize(item.fileSize)}</span>
                   </div>
                 </div>
                 <button
                   onClick={() => handleRestore(item.fileName)}
                   disabled={restoring === item.fileName}
-                  className="btn btn-ghost p-2 flex items-center gap-1.5 text-xs opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity"
+                  className="btn btn-ghost flex items-center gap-2 !text-[13px] !font-semibold opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity"
                   style={{ color: 'var(--accent)' }}
                   title={t('trash.restore')}
                 >
-                  <RotateCcw size={14} className={restoring === item.fileName ? 'animate-spin' : ''} />
+                  <RotateCcw size={16} className={restoring === item.fileName ? 'animate-spin' : ''} />
                   {t('trash.restore')}
                 </button>
               </div>

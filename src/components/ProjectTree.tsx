@@ -29,7 +29,7 @@ export default function ProjectTree({ projects, selectedProject, onSelect }: Pro
   const maxSessions = Math.max(...projects.map((p) => p.sessionCount), 1);
 
   return (
-    <div className="py-2">
+    <div className="py-3 px-3 space-y-0.5">
       <div className="section-label">{t('projects.title')}</div>
       {projects.map((project, idx) => {
         const isActive = selectedProject === project.encodedPath;
@@ -37,22 +37,24 @@ export default function ProjectTree({ projects, selectedProject, onSelect }: Pro
         return (
           <button
             key={project.encodedPath}
+            data-testid="project-item"
+            data-project-id={project.encodedPath}
             onClick={() => onSelect(project.encodedPath)}
             className={`sidebar-item w-full ${isActive ? 'active' : ''} animate-fade-in`}
             style={{ animationDelay: `${idx * 30}ms` }}
           >
             {isActive ? (
-              <FolderOpen size={16} style={{ flexShrink: 0 }} />
+              <FolderOpen size={18} style={{ flexShrink: 0 }} />
             ) : (
-              <Folder size={16} style={{ flexShrink: 0 }} />
+              <Folder size={18} style={{ flexShrink: 0 }} />
             )}
             <div className="flex-1 text-left min-w-0">
-              <div className="truncate text-sm">{project.displayName}</div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-2xs" style={{ color: 'var(--txt-3)' }}>
+              <div className="truncate text-[13.5px] font-medium leading-tight">{project.displayName}</div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[11px] font-medium" style={{ color: 'var(--txt-3)' }}>
                   {project.sessionCount} {t('projects.sessions')}
                 </span>
-                <div className="token-bar flex-1" style={{ maxWidth: 48 }}>
+                <div className="token-bar flex-1 !h-1" style={{ maxWidth: 60 }}>
                   <div className="token-bar-fill" style={{ width: `${pct}%` }} />
                 </div>
               </div>

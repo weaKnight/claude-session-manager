@@ -70,94 +70,121 @@ export default function SessionList({ sessions, projectId, onSelect, onRefresh }
   };
 
   return (
-    <div className="h-full overflow-y-auto p-4">
-      <h2 className="text-lg font-medium mb-4" style={{ color: 'var(--txt-1)' }}>
-        {t('sessions.title')}
-        <span className="text-sm font-normal ml-2" style={{ color: 'var(--txt-3)' }}>
-          ({sessions.length})
-        </span>
-      </h2>
-
-      {sessions.length === 0 && (
-        <p className="text-sm" style={{ color: 'var(--txt-3)' }}>{t('sessions.no_sessions')}</p>
-      )}
-
-      <div className="space-y-2">
-        {sessions.map((session, idx) => {
-          const totalTokens = (session.totalTokens.input_tokens || 0) + (session.totalTokens.output_tokens || 0);
-          const maxTokens = Math.max(...sessions.map((s) => (s.totalTokens.input_tokens || 0) + (s.totalTokens.output_tokens || 0)), 1);
-          const tokenPct = Math.round((totalTokens / maxTokens) * 100);
-
-          return (
-            <div
-              key={session.id}
-              onClick={() => onSelect(projectId, session.id)}
-              className="group card p-4 cursor-pointer transition-all hover:translate-x-0.5 animate-fade-in"
-              style={{ animationDelay: `${idx * 40}ms` }}
+    <div className="h-full overflow-y-auto">
+      <div className="px-10 pt-10 pb-6 max-w-6xl mx-auto">
+        <div className="flex items-end justify-between gap-4 mb-8">
+          <div>
+            <h1
+              className="text-4xl font-bold tracking-tight"
+              style={{ color: 'var(--txt-1)', letterSpacing: '-0.035em' }}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  {/* Summary / 摘要 */}
-                  <p className="text-sm font-medium truncate" style={{ color: 'var(--txt-1)' }}>
-                    {session.isAgent && (
-                      <span className="badge badge-tool mr-2">
-                        <Bot size={10} className="mr-1" />
-                        {t('sessions.agent_session')}
-                      </span>
-                    )}
-                    {session.summary || session.id}
-                  </p>
+              {t('sessions.title')}
+            </h1>
+            <p className="text-[15px] mt-1.5" style={{ color: 'var(--txt-2)' }}>
+              {sessions.length} {sessions.length === 1 ? 'conversation' : 'conversations'} in this project
+            </p>
+          </div>
+          <span
+            className="text-[12px] font-mono font-bold px-4 py-2 rounded-full"
+            style={{ background: 'var(--accent-muted)', color: 'var(--accent)' }}
+          >
+            {sessions.length.toString().padStart(2, '0')}
+          </span>
+        </div>
 
-                  {/* Metadata row / 元数据行 */}
-                  <div className="flex items-center gap-3 mt-2 flex-wrap">
-                    <span className="inline-flex items-center gap-1 text-2xs" style={{ color: 'var(--txt-3)' }}>
-                      <Clock size={12} />
-                      {formatTime(session.lastTimestamp)}
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-2xs" style={{ color: 'var(--txt-3)' }}>
-                      <MessageSquare size={12} />
-                      {session.messageCount} {t('sessions.messages')}
-                    </span>
-                    {session.gitBranch && (
-                      <span className="inline-flex items-center gap-1 text-2xs" style={{ color: 'var(--txt-3)' }}>
-                        <GitBranch size={12} />
-                        {session.gitBranch}
-                      </span>
-                    )}
-                    <span
-                      className="text-2xs font-medium"
-                      style={{ color: 'var(--txt-3)', fontFamily: 'JetBrains Mono, monospace' }}
+        {sessions.length === 0 && (
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <MessageSquare size={32} />
+            </div>
+            <p className="text-[15px] mt-2">{t('sessions.no_sessions')}</p>
+          </div>
+        )}
+
+        <div className="space-y-3.5">
+          {sessions.map((session, idx) => {
+            const totalTokens = (session.totalTokens.input_tokens || 0) + (session.totalTokens.output_tokens || 0);
+            const maxTokens = Math.max(...sessions.map((s) => (s.totalTokens.input_tokens || 0) + (s.totalTokens.output_tokens || 0)), 1);
+            const tokenPct = Math.round((totalTokens / maxTokens) * 100);
+
+            return (
+              <div
+                key={session.id}
+                data-testid="session-item"
+                data-session-id={session.id}
+                onClick={() => onSelect(projectId, session.id)}
+                className="group card p-6 cursor-pointer hover:translate-y-[-2px] animate-fade-in"
+                style={{ animationDelay: `${idx * 40}ms` }}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    {/* Summary / 摘要 */}
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      {session.isAgent && (
+                        <span className="badge badge-tool">
+                          <Bot size={11} className="mr-1" />
+                          {t('sessions.agent_session')}
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      className="text-[16px] font-semibold truncate leading-snug group-hover:text-[color:var(--accent)] transition-colors"
+                      style={{ color: 'var(--txt-1)', letterSpacing: '-0.012em' }}
                     >
-                      {formatTokens(session.totalTokens)} {t('sessions.tokens')}
-                    </span>
-                  </div>
+                      {session.summary || session.id}
+                    </p>
 
-                  {/* Token bar / Token 用量条 */}
-                  <div className="mt-2.5">
-                    <div className="token-bar">
-                      <div className="token-bar-fill" style={{ width: `${tokenPct}%` }} />
+                    {/* Metadata row / 元数据行 */}
+                    <div className="flex items-center gap-4 mt-3 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: 'var(--txt-3)' }}>
+                        <Clock size={13} />
+                        {formatTime(session.lastTimestamp)}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: 'var(--txt-3)' }}>
+                        <MessageSquare size={13} />
+                        {session.messageCount} {t('sessions.messages')}
+                      </span>
+                      {session.gitBranch && (
+                        <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: 'var(--txt-3)' }}>
+                          <GitBranch size={13} />
+                          {session.gitBranch}
+                        </span>
+                      )}
+                      <span
+                        className="text-[12px] font-bold px-2 py-0.5 rounded-md ml-auto"
+                        style={{ background: 'var(--surface-2)', color: 'var(--txt-2)', fontFamily: 'JetBrains Mono, monospace' }}
+                      >
+                        {formatTokens(session.totalTokens)} tok
+                      </span>
+                    </div>
+
+                    {/* Token bar / Token 用量条 */}
+                    <div className="mt-4">
+                      <div className="token-bar !h-1.5">
+                        <div className="token-bar-fill" style={{ width: `${tokenPct}%` }} />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Delete button / 删除按钮 */}
-                <button
-                  onClick={(e) => handleDelete(e, session.id)}
-                  className="btn btn-ghost p-1.5 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity"
-                  style={{ color: 'var(--txt-3)' }}
-                  disabled={deleting === session.id}
-                  title={t('sessions.delete')}
-                >
-                  {deleting === session.id ? (
-                    <span className="spinner" />
-                  ) : (
-                    <Trash2 size={14} />
-                  )}
-                </button>
+                  {/* Delete button / 删除按钮 */}
+                  <button
+                    onClick={(e) => handleDelete(e, session.id)}
+                    className="btn btn-ghost !p-2.5 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity"
+                    style={{ color: 'var(--txt-3)' }}
+                    disabled={deleting === session.id}
+                    title={t('sessions.delete')}
+                  >
+                    {deleting === session.id ? (
+                      <span className="spinner" />
+                    ) : (
+                      <Trash2 size={16} />
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );

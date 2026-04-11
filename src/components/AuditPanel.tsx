@@ -99,45 +99,48 @@ export default function AuditPanel({ projectId, sessionId }: Props) {
   return (
     <div className="h-full flex flex-col">
       {/* Header / 头部 */}
-      <div className="p-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
-        <h2 className="text-lg font-semibold" style={{ color: 'var(--txt-1)' }}>
+      <div className="px-8 py-6 border-b" style={{ borderColor: 'var(--border-default)' }}>
+        <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--txt-1)', letterSpacing: '-0.03em' }}>
           {t('audit.title')}
-        </h2>
+        </h1>
+        <p className="text-[14px] mt-1" style={{ color: 'var(--txt-2)' }}>
+          Every command executed in this session, in chronological order
+        </p>
 
         {/* Stats strip / 统计条 */}
-        <div className="flex items-center gap-3 mt-2">
+        <div className="flex items-center gap-3 mt-5">
           <span
-            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-2xs font-medium"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold"
             style={{ background: 'var(--surface-2)', color: 'var(--txt-2)', fontFamily: 'JetBrains Mono, monospace' }}
           >
-            {commands.length} commands
+            {commands.length} COMMANDS
           </span>
           <span
-            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-2xs font-medium"
-            style={{ background: 'rgba(124, 106, 10, 0.08)', color: 'var(--status-warn)', fontFamily: 'JetBrains Mono, monospace' }}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold"
+            style={{ background: 'rgba(124, 106, 10, 0.1)', color: 'var(--status-warn)', fontFamily: 'JetBrains Mono, monospace' }}
           >
-            <Terminal size={10} />
-            {bashCount} shell
+            <Terminal size={12} />
+            {bashCount} SHELL
           </span>
           {errorCount > 0 && (
             <span
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-2xs font-medium"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold"
               style={{ background: 'var(--role-error)', color: 'var(--status-err)', fontFamily: 'JetBrains Mono, monospace' }}
             >
-              <AlertTriangle size={10} />
-              {errorCount} {t('audit.error')}
+              <AlertTriangle size={12} />
+              {errorCount} {(t('audit.error') as string).toUpperCase()}
             </span>
           )}
         </div>
 
         {/* Tool filter / 工具筛选 */}
-        <div className="flex items-center gap-2 mt-3 flex-wrap">
-          <Filter size={14} style={{ color: 'var(--txt-3)' }} />
+        <div className="flex items-center gap-2 mt-4 flex-wrap">
+          <Filter size={16} style={{ color: 'var(--txt-3)' }} />
           {toolNames.map((name) => (
             <button
               key={name}
               onClick={() => setToolFilter(name)}
-              className={`badge cursor-pointer ${toolFilter === name ? 'badge-tool' : ''}`}
+              className={`inline-flex items-center px-3 py-1.5 rounded-full text-[12px] font-semibold cursor-pointer transition-all ${toolFilter === name ? 'badge-tool' : ''}`}
               style={toolFilter !== name ? { background: 'var(--surface-2)', color: 'var(--txt-2)' } : {}}
             >
               {name === 'all' ? t('audit.filter_tool') : name}
@@ -147,7 +150,7 @@ export default function AuditPanel({ projectId, sessionId }: Props) {
       </div>
 
       {/* Timeline / 时间线 */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto px-8 py-6">
         {filtered.length === 0 && (
           <p className="text-sm text-center py-4" style={{ color: 'var(--txt-3)' }}>
             {t('audit.no_commands')}
