@@ -4,21 +4,32 @@
  * 侧边栏 + 内容区域外壳
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FolderTree, Search, Shield, BarChart3, Trash2, LogOut,
   Sun, Moon, ChevronLeft, Menu, WifiOff,
   TrendingUp, Activity, Database,
 } from 'lucide-react';
-import { projects as projectsApi, type ProjectInfo, type SessionMeta } from '../utils/api';
+import { projects as projectsApi, invalidateEtagCache, type ProjectInfo, type SessionMeta } from '../utils/api';
 import { useSSE } from '../hooks/useSSE';
 import ProjectTree from './ProjectTree';
 import SessionList from './SessionList';
-import ChatViewer from './ChatViewer';
-import SearchPanel from './SearchPanel';
-import AuditPanel from './AuditPanel';
-import TrashPanel from './TrashPanel';
+
+// Heavy panels are route-level lazy: only fetched when first rendered.
+// 重型面板路由级懒加载——首次进入对应视图才下载
+const ChatViewer = lazy(() => import('./ChatViewer'));
+const SearchPanel = lazy(() => import('./SearchPanel'));
+const AuditPanel = lazy(() => import('./AuditPanel'));
+const TrashPanel = lazy(() => import('./TrashPanel'));
+
+function PanelFallback() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="w-8 h-8 rounded-lg animate-pulse-slow" style={{ background: 'var(--accent-muted)' }} />
+    </div>
+  );
+}
 
 type View = 'projects' | 'search' | 'audit' | 'trash' | 'stats';
 
@@ -57,14 +68,77 @@ export default function Layout({ onLogout }: LayoutProps) {
 
   useEffect(() => { loadProjects(); }, [loadProjects]);
 
+  // Refs mirror selection so the SSE callback below sees current values
+  // without re-subscribing every render (the original closure read stale state).
+  // Ref 镜像当前选择——避免 SSE 回调闭包陈旧
+  const selectedRef = useRef({ selectedProject, selectedSession });
+  useEffect(() => { selectedRef.current = { selectedProject, selectedSession }; }, [selectedProject, selectedSession]);
+
+  // Coalesce SSE bursts so a chatty live session doesn't flood refetches
+  // 合并 SSE 突发：高频写入时不每条都拉
+  const sseTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  useEffect(() => () => {
+    for (const t of sseTimers.current.values()) clearTimeout(t);
+    sseTimers.current.clear();
+  }, []);
+
+  // Registry of live-append handlers keyed by `${projectId}/${sessionId}`.
+  // ChatViewer subscribes here in an effect; SSE fires the matching one.
+  // 实时追加回调注册表；ChatViewer 在 effect 里订阅
+  const liveAppendHandlers = useRef<Map<string, () => void>>(new Map());
+  const registerLiveAppend = useCallback((key: string, fn: () => void) => {
+    liveAppendHandlers.current.set(key, fn);
+    return () => {
+      if (liveAppendHandlers.current.get(key) === fn) {
+        liveAppendHandlers.current.delete(key);
+      }
+    };
+  }, []);
+
   // SSE live updates / SSE 实时更新
   const { connected } = useSSE((event) => {
-    if (event.type === 'add' || event.type === 'change' || event.type === 'remove') {
-      loadProjects();
-      if (selectedProject === event.projectId) {
-        handleSelectProject(event.projectId!);
+    if (event.type !== 'add' && event.type !== 'change' && event.type !== 'remove') return;
+
+    const { selectedProject: sp, selectedSession: ss } = selectedRef.current;
+    const evtKey = `${event.projectId ?? ''}/${event.sessionId ?? ''}`;
+    const existing = sseTimers.current.get(evtKey);
+    if (existing) clearTimeout(existing);
+
+    sseTimers.current.set(evtKey, setTimeout(() => {
+      sseTimers.current.delete(evtKey);
+
+      // add/remove always invalidate the project listing / 增删一定刷新项目列表
+      if (event.type === 'add' || event.type === 'remove') {
+        loadProjects();
       }
-    }
+
+      // Drop stale ETag cache for the touched session so next fetch is fresh
+      // 清除被改动会话的 ETag 客户端缓存
+      if (event.projectId && event.sessionId) {
+        invalidateEtagCache(`/sessions/${event.projectId}/${event.sessionId}`);
+      }
+
+      // Active session changed → ChatViewer fetches the new tail itself
+      // 当前打开的 session 命中 → ChatViewer 自己拉新切片追加
+      if (
+        event.type === 'change'
+        && ss
+        && event.projectId === ss.projectId
+        && event.sessionId === ss.sessionId
+      ) {
+        const handler = liveAppendHandlers.current.get(`${ss.projectId}/${ss.sessionId}`);
+        handler?.();
+        return;
+      }
+
+      // If the user is viewing this exact project's listing, refresh sessions
+      // 用户正看着这个项目时，刷新它的会话列表
+      if (sp && sp === event.projectId) {
+        if (!ss || ss.projectId !== sp) {
+          handleSelectProject(sp);
+        }
+      }
+    }, 500));
   });
 
   // Select project → load sessions / 选择项目 → 加载会话
@@ -231,21 +305,28 @@ export default function Layout({ onLogout }: LayoutProps) {
             />
           )}
           {view === 'projects' && selectedSession && (
-            <ChatViewer
-              projectId={selectedSession.projectId}
-              sessionId={selectedSession.sessionId}
-              onBack={() => setSelectedSession(null)}
-              onViewAudit={() => setView('audit')}
-            />
+            <Suspense fallback={<PanelFallback />}>
+              <ChatViewer
+                projectId={selectedSession.projectId}
+                sessionId={selectedSession.sessionId}
+                onBack={() => setSelectedSession(null)}
+                onViewAudit={() => setView('audit')}
+                registerLiveAppend={registerLiveAppend}
+              />
+            </Suspense>
           )}
           {view === 'search' && (
-            <SearchPanel onNavigate={handleSelectSession} />
+            <Suspense fallback={<PanelFallback />}>
+              <SearchPanel onNavigate={handleSelectSession} />
+            </Suspense>
           )}
           {view === 'audit' && selectedSession && (
-            <AuditPanel
-              projectId={selectedSession.projectId}
-              sessionId={selectedSession.sessionId}
-            />
+            <Suspense fallback={<PanelFallback />}>
+              <AuditPanel
+                projectId={selectedSession.projectId}
+                sessionId={selectedSession.sessionId}
+              />
+            </Suspense>
           )}
           {view === 'audit' && !selectedSession && (
             <div className="empty-state h-full">
@@ -259,7 +340,9 @@ export default function Layout({ onLogout }: LayoutProps) {
             </div>
           )}
           {view === 'trash' && (
-            <TrashPanel />
+            <Suspense fallback={<PanelFallback />}>
+              <TrashPanel />
+            </Suspense>
           )}
           {view === 'stats' && (
             <div className="p-10 max-w-6xl mx-auto overflow-y-auto h-full">

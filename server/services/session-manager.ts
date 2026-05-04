@@ -9,17 +9,20 @@ import { join, basename } from 'path';
 import { config } from '../utils/config.js';
 import { logger } from '../utils/logger.js';
 import {
-  parseSessionMeta,
   parseSessionFile,
+  parseSessionSlice,
   extractCommands,
   getProjectDisplayName,
 } from '../parser/jsonl-reader.js';
+import type { ParsedMessage } from '../parser/message-types.js';
+import {
+  getOrParseMeta,
+  saveProjectIndex,
+  evictSession,
+  evictProject,
+} from './meta-cache.js';
+import { loadOffsetIndex, findAnchor } from './offset-cache.js';
 import type { ProjectInfo, SessionMeta, ParsedSession, AuditCommand } from '../parser/message-types.js';
-
-// Cache for session metadata / 会话元数据缓存
-const metaCache = new Map<string, SessionMeta>();
-let lastScanTime = 0;
-const CACHE_TTL_MS = 30_000; // 30 seconds / 30 秒
 
 /**
  * Get the projects directory path / 获取项目目录路径
@@ -97,28 +100,20 @@ export async function listSessions(projectId: string): Promise<SessionMeta[]> {
   const jsonlFiles = readdirSync(projectDir).filter((f) => f.endsWith('.jsonl'));
   const sessions: SessionMeta[] = [];
 
-  const needsRefresh = Date.now() - lastScanTime > CACHE_TTL_MS;
-
   for (const file of jsonlFiles) {
     const filePath = join(projectDir, file);
-    const cacheKey = filePath;
-
-    // Use cache if available and fresh / 使用缓存（如果可用且新鲜）
-    if (!needsRefresh && metaCache.has(cacheKey)) {
-      sessions.push(metaCache.get(cacheKey)!);
-      continue;
-    }
-
+    const sessionId = file.replace(/\.jsonl$/, '');
     try {
-      const meta = await parseSessionMeta(filePath);
-      metaCache.set(cacheKey, meta);
+      const meta = await getOrParseMeta(projectId, sessionId, filePath);
       sessions.push(meta);
     } catch (err) {
       logger.error(`Failed to parse ${file}: ${err}`);
     }
   }
 
-  if (needsRefresh) lastScanTime = Date.now();
+  // Persist any newly parsed entries (no-op when cache was warm)
+  // 持久化新解析的条目（缓存命中时为空操作）
+  await saveProjectIndex(projectId).catch(() => { /* logged inside */ });
 
   // Sort by most recent / 按时间倒序
   sessions.sort((a, b) => b.lastTimestamp.localeCompare(a.lastTimestamp));
@@ -126,19 +121,104 @@ export async function listSessions(projectId: string): Promise<SessionMeta[]> {
 }
 
 /**
- * Get full session detail with all messages / 获取完整会话（含所有消息）
+ * Resolve a session's absolute file path after validating IDs.
+ * 校验 ID 后解析会话绝对路径
  */
-export async function getSession(projectId: string, sessionId: string): Promise<ParsedSession> {
+function resolveSessionPath(projectId: string, sessionId: string): string {
   if (!isValidId(projectId) || !isValidId(sessionId)) {
     throw new Error('Invalid ID / 无效 ID');
   }
-
   const filePath = join(getProjectsDir(), projectId, `${sessionId}.jsonl`);
   if (!existsSync(filePath)) {
     throw new Error('Session not found / 会话不存在');
   }
+  return filePath;
+}
 
+/**
+ * Get session metadata only (no message body).
+ * 仅获取会话元数据
+ */
+export async function getSessionMeta(projectId: string, sessionId: string): Promise<SessionMeta> {
+  const filePath = resolveSessionPath(projectId, sessionId);
+  return getOrParseMeta(projectId, sessionId, filePath);
+}
+
+/**
+ * Get a sliced range of messages.
+ *
+ * When `afterUuid` is provided, look up the byte-offset sidecar for an exact
+ * anchor match and pass that to the parser as `seekFromByte`. Anchors are
+ * placed every 100 messages by parseSessionMeta, so default-page cursors
+ * (every 200) land on anchors and turn O(file) scans into O(slice).
+ * 用 offset sidecar 把 cursor 命中转为直接 seek，避免大文件全扫
+ */
+export async function getSessionMessages(
+  projectId: string,
+  sessionId: string,
+  opts: { afterUuid?: string; limit: number },
+): Promise<{ messages: ParsedMessage[]; nextCursor: string | null }> {
+  const filePath = resolveSessionPath(projectId, sessionId);
+
+  let seekFromByte: number | undefined;
+  if (opts.afterUuid) {
+    try {
+      const st = statSync(filePath);
+      const offsets = await loadOffsetIndex(projectId, sessionId, st.mtimeMs, st.size);
+      if (offsets) {
+        const anchor = findAnchor(offsets, opts.afterUuid);
+        if (anchor) seekFromByte = anchor.byteOffset;
+      }
+    } catch {
+      // Fall back to filehead scan / 失败则回退全扫
+    }
+  }
+
+  return parseSessionSlice(filePath, { ...opts, seekFromByte });
+}
+
+/**
+ * File-stat-based identity for ETag/Last-Modified responses.
+ * 用于 ETag/Last-Modified 的 stat 信息
+ */
+export function getSessionStat(
+  projectId: string,
+  sessionId: string,
+): { mtimeMs: number; size: number } {
+  const filePath = resolveSessionPath(projectId, sessionId);
+  const st = statSync(filePath);
+  return { mtimeMs: st.mtimeMs, size: st.size };
+}
+
+/**
+ * Backwards-compatible full-session loader. Returns the entire message list.
+ * Prefer getSessionMeta + getSessionMessages for paginated access.
+ * 兼容旧客户端的全量加载；新客户端请改用切片接口
+ */
+export async function getSession(projectId: string, sessionId: string): Promise<ParsedSession> {
+  const filePath = resolveSessionPath(projectId, sessionId);
   return parseSessionFile(filePath);
+}
+
+/**
+ * Default page size for the session detail endpoint.
+ * 详情接口默认页大小
+ */
+export const DEFAULT_MESSAGE_PAGE = 200;
+
+/**
+ * Sliced session detail: meta + first page of messages + nextCursor.
+ * 切片版会话详情：元数据 + 首页消息 + nextCursor
+ */
+export async function getSessionPage(
+  projectId: string,
+  sessionId: string,
+  limit = DEFAULT_MESSAGE_PAGE,
+): Promise<{ meta: SessionMeta; messages: ParsedMessage[]; nextCursor: string | null }> {
+  const filePath = resolveSessionPath(projectId, sessionId);
+  const meta = await getOrParseMeta(projectId, sessionId, filePath);
+  const slice = await parseSessionSlice(filePath, { limit });
+  return { meta, messages: slice.messages, nextCursor: slice.nextCursor };
 }
 
 /**
@@ -186,7 +266,8 @@ export function softDeleteSession(projectId: string, sessionId: string): { succe
         logger.info(`Source is read-only, session copied to trash but original preserved: ${sessionId}`);
       }
     }
-    metaCache.delete(filePath);
+    evictSession(projectId, sessionId);
+    saveProjectIndex(projectId).catch(() => { /* best effort */ });
     logger.info(`Session soft-deleted: ${sessionId} -> trash`);
     return { success: true };
   } catch (err) {
@@ -213,7 +294,8 @@ export function hardDeleteSession(projectId: string, sessionId: string): { succe
 
   try {
     unlinkSync(filePath);
-    metaCache.delete(filePath);
+    evictSession(projectId, sessionId);
+    saveProjectIndex(projectId).catch(() => { /* best effort */ });
     logger.info(`Session permanently deleted: ${sessionId}`);
     return { success: true };
   } catch (err) {
@@ -338,16 +420,20 @@ export function emptyTrash(): { success: boolean; deleted: number; error?: strin
 }
 
 /**
- * Invalidate cache for a project (called on file change)
- * 使项目缓存失效（文件变更时调用）
+ * Invalidate cache for an entire project (project-level events).
+ * 项目级失效——丢弃整个项目的内存与磁盘索引
  */
 export function invalidateProjectCache(projectId: string): void {
-  const prefix = join(getProjectsDir(), projectId);
-  for (const key of metaCache.keys()) {
-    if (key.startsWith(prefix)) {
-      metaCache.delete(key);
-    }
-  }
+  evictProject(projectId);
+}
+
+/**
+ * Invalidate the cache entry for a single session (file-level events).
+ * 单会话失效——文件变更/删除事件调用
+ */
+export function invalidateSessionCache(projectId: string, sessionId: string): void {
+  evictSession(projectId, sessionId);
+  saveProjectIndex(projectId).catch(() => { /* best effort */ });
 }
 
 /**

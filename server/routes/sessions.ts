@@ -7,6 +7,9 @@ import {
   listProjects,
   listSessions,
   getSession,
+  getSessionPage,
+  getSessionMessages,
+  getSessionStat,
   getSessionCommands,
   softDeleteSession,
   hardDeleteSession,
@@ -14,7 +17,9 @@ import {
   listTrash,
   restoreSession,
   emptyTrash,
+  DEFAULT_MESSAGE_PAGE,
 } from '../services/session-manager.js';
+import { etagFor, handleConditional } from '../utils/etag.js';
 
 const router = Router();
 
@@ -40,11 +45,53 @@ router.get('/projects/:projectId/sessions', async (req, res) => {
   }
 });
 
-// GET /api/v1/sessions/:projectId/:sessionId - Get full session / 获取完整会话
+// GET /api/v1/sessions/:projectId/:sessionId - First page of messages + meta
+// 默认返回首页消息（200 条）+ meta + nextCursor；?full=true 强制全量（兼容老客户端）
+// 默认返回首页（200 条）+ meta + nextCursor；?full=true 走全量（兼容旧客户端）
 router.get('/sessions/:projectId/:sessionId', async (req, res) => {
   try {
-    const session = await getSession(req.params.projectId, req.params.sessionId);
-    res.json(session);
+    const { projectId, sessionId } = req.params;
+
+    // ETag short-circuit / ETag 304 短路
+    try {
+      const { mtimeMs, size } = getSessionStat(projectId, sessionId);
+      const etag = etagFor(mtimeMs, size, 'page');
+      if (handleConditional(req, res, etag, mtimeMs)) return;
+    } catch { /* let main handler raise */ }
+
+    if (req.query['full'] === 'true') {
+      const session = await getSession(projectId, sessionId);
+      res.json(session);
+      return;
+    }
+
+    const limitRaw = req.query['limit'];
+    const limit = typeof limitRaw === 'string'
+      ? Math.max(1, Math.min(500, parseInt(limitRaw, 10) || DEFAULT_MESSAGE_PAGE))
+      : DEFAULT_MESSAGE_PAGE;
+
+    const page = await getSessionPage(projectId, sessionId, limit);
+    res.json(page);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.includes('not found') ? 404 : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
+// GET /api/v1/sessions/:projectId/:sessionId/messages?after=<uuid>&limit=200
+// 切片消息分页接口
+router.get('/sessions/:projectId/:sessionId/messages', async (req, res) => {
+  try {
+    const { projectId, sessionId } = req.params;
+    const after = typeof req.query['after'] === 'string' ? req.query['after'] : undefined;
+    const limitRaw = req.query['limit'];
+    const limit = typeof limitRaw === 'string'
+      ? Math.max(1, Math.min(500, parseInt(limitRaw, 10) || DEFAULT_MESSAGE_PAGE))
+      : DEFAULT_MESSAGE_PAGE;
+
+    const slice = await getSessionMessages(projectId, sessionId, { afterUuid: after, limit });
+    res.json(slice);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const status = message.includes('not found') ? 404 : 500;
@@ -55,7 +102,15 @@ router.get('/sessions/:projectId/:sessionId', async (req, res) => {
 // GET /api/v1/sessions/:projectId/:sessionId/commands - Audit commands / 审计命令
 router.get('/sessions/:projectId/:sessionId/commands', async (req, res) => {
   try {
-    const commands = await getSessionCommands(req.params.projectId, req.params.sessionId);
+    const { projectId, sessionId } = req.params;
+
+    try {
+      const { mtimeMs, size } = getSessionStat(projectId, sessionId);
+      const etag = etagFor(mtimeMs, size, 'cmd');
+      if (handleConditional(req, res, etag, mtimeMs)) return;
+    } catch { /* fall through */ }
+
+    const commands = await getSessionCommands(projectId, sessionId);
     res.json({ commands });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

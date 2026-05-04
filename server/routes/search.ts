@@ -3,7 +3,7 @@
  */
 
 import { Router } from 'express';
-import { search, buildIndex, needsRebuild } from '../services/search-engine.js';
+import { search, buildIndex, isReady } from '../services/search-engine.js';
 
 const router = Router();
 
@@ -15,8 +15,9 @@ router.get('/search', async (req, res) => {
     return;
   }
 
-  // Rebuild index if stale / 索引过期则重建
-  if (needsRebuild()) {
+  // First request before startup buildIndex finished — kick rebuild on demand
+  // 启动期 buildIndex 还没完成时，按需重建
+  if (!isReady()) {
     await buildIndex();
   }
 

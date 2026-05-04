@@ -31,7 +31,7 @@ export default function ProjectTree({ projects, selectedProject, onSelect }: Pro
   return (
     <div className="py-3 px-3 space-y-0.5">
       <div className="section-label">{t('projects.title')}</div>
-      {projects.map((project, idx) => {
+      {projects.map((project) => {
         const isActive = selectedProject === project.encodedPath;
         const pct = Math.round((project.sessionCount / maxSessions) * 100);
         return (
@@ -40,8 +40,7 @@ export default function ProjectTree({ projects, selectedProject, onSelect }: Pro
             data-testid="project-item"
             data-project-id={project.encodedPath}
             onClick={() => onSelect(project.encodedPath)}
-            className={`sidebar-item w-full ${isActive ? 'active' : ''} animate-fade-in`}
-            style={{ animationDelay: `${idx * 30}ms` }}
+            className={`sidebar-item w-full ${isActive ? 'active' : ''}`}
           >
             {isActive ? (
               <FolderOpen size={18} style={{ flexShrink: 0 }} />

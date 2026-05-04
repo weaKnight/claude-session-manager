@@ -9,7 +9,9 @@ import { join, basename, dirname } from 'path';
 import type { Response } from 'express';
 import { config } from '../utils/config.js';
 import { logger } from '../utils/logger.js';
-import { invalidateProjectCache } from './session-manager.js';
+import { invalidateSessionCache } from './session-manager.js';
+import { evictOffsets } from './offset-cache.js';
+import { onFileEvent } from './search-engine.js';
 
 // SSE client connections / SSE 客户端连接
 const sseClients: Set<Response> = new Set();
@@ -61,8 +63,17 @@ function handleChange(eventType: string, filePath: string): void {
 
   logger.debug(`File ${eventType}: ${projectId}/${sessionId}`);
 
-  // Invalidate cache / 使缓存失效
-  invalidateProjectCache(projectId);
+  // Invalidate just this session's meta cache (file-level granularity)
+  // 仅作用到该会话——避免连带丢弃整个项目缓存
+  invalidateSessionCache(projectId, sessionId);
+  // Drop stale byte-offset sidecar; meta cache will rebuild it on next read
+  // 同时丢弃过期的字节偏移 sidecar
+  evictOffsets(projectId, sessionId).catch(() => { /* best effort */ });
+  // Apply incremental delta to the search index; persist debounces on its end
+  // 增量更新搜索索引，由 search-engine 自行 debounce 落盘
+  onFileEvent(eventType as 'add' | 'change' | 'unlink', filePath).catch((err) => {
+    logger.debug(`search onFileEvent error: ${err}`);
+  });
 
   // Broadcast to all SSE clients / 广播到所有 SSE 客户端
   const event = {

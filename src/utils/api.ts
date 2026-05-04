@@ -27,12 +27,32 @@ export function clearToken(): void {
   localStorage.removeItem('csm_token');
 }
 
+// In-memory ETag cache for idempotent GETs. Each entry holds the last
+// response body alongside its server-issued ETag, letting us send
+// If-None-Match and serve a 304 from cache without a roundtrip cost.
+// 仅对幂等 GET 生效的 ETag 缓存；用 If-None-Match 命中后直接复用本地副本
+const etagCache = new Map<string, { etag: string; body: unknown }>();
+
+/**
+ * Drop a cached ETag entry (called when SSE signals the resource changed).
+ * SSE 接到资源变更时调用，丢弃陈旧缓存
+ */
+export function invalidateEtagCache(prefix?: string): void {
+  if (!prefix) {
+    etagCache.clear();
+    return;
+  }
+  for (const key of etagCache.keys()) {
+    if (key.startsWith(prefix)) etagCache.delete(key);
+  }
+}
+
 /**
  * Generic fetch wrapper with auth / 通用 fetch 封装（带认证）
  */
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit & { signal?: AbortSignal } = {}
 ): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -42,6 +62,13 @@ async function request<T>(
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const method = (options.method || 'GET').toUpperCase();
+  const isCacheable = method === 'GET';
+  const cached = isCacheable ? etagCache.get(path) : undefined;
+  if (cached) {
+    headers['If-None-Match'] = cached.etag;
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
@@ -60,12 +87,21 @@ async function request<T>(
     throw new Error('Unauthorized');
   }
 
+  if (res.status === 304 && cached) {
+    return cached.body as T;
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(body.error || `HTTP ${res.status}`);
   }
 
-  return res.json() as Promise<T>;
+  const body = (await res.json()) as T;
+  if (isCacheable) {
+    const etag = res.headers.get('ETag');
+    if (etag) etagCache.set(path, { etag, body });
+  }
+  return body;
 }
 
 // --- Auth API / 认证接口 ---
@@ -161,21 +197,47 @@ export interface SearchResult {
 }
 
 export const projects = {
-  list: () => request<{ projects: ProjectInfo[] }>('/projects'),
+  list: (signal?: AbortSignal) =>
+    request<{ projects: ProjectInfo[] }>('/projects', { signal }),
 
-  sessions: (projectId: string) =>
-    request<{ sessions: SessionMeta[] }>(`/projects/${projectId}/sessions`),
+  sessions: (projectId: string, signal?: AbortSignal) =>
+    request<{ sessions: SessionMeta[] }>(`/projects/${projectId}/sessions`, { signal }),
 };
 
-export const sessions = {
-  get: (projectId: string, sessionId: string) =>
-    request<{ meta: SessionMeta; messages: ParsedMessage[] }>(
-      `/sessions/${projectId}/${sessionId}`
-    ),
+export interface SessionPage {
+  meta: SessionMeta;
+  messages: ParsedMessage[];
+  nextCursor: string | null;
+}
 
-  commands: (projectId: string, sessionId: string) =>
+export interface MessageSlice {
+  messages: ParsedMessage[];
+  nextCursor: string | null;
+}
+
+export const sessions = {
+  get: (projectId: string, sessionId: string, signal?: AbortSignal) =>
+    request<SessionPage>(`/sessions/${projectId}/${sessionId}`, { signal }),
+
+  messages: (
+    projectId: string,
+    sessionId: string,
+    opts: { after?: string; limit?: number; signal?: AbortSignal } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.after) params.set('after', opts.after);
+    if (opts.limit) params.set('limit', String(opts.limit));
+    const qs = params.toString();
+    return request<MessageSlice>(
+      `/sessions/${projectId}/${sessionId}/messages${qs ? `?${qs}` : ''}`,
+      { signal: opts.signal },
+    );
+  },
+
+  commands: (projectId: string, sessionId: string, signal?: AbortSignal) =>
     request<{ commands: AuditCommand[] }>(
-      `/sessions/${projectId}/${sessionId}/commands`
+      `/sessions/${projectId}/${sessionId}/commands`,
+      { signal },
     ),
 
   delete: (projectId: string, sessionId: string, force = false) =>

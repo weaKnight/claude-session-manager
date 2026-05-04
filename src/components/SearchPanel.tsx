@@ -95,8 +95,7 @@ export default function SearchPanel({ onNavigate }: Props) {
             <div
               key={`${result.sessionId}-${idx}`}
               onClick={() => onNavigate(result.projectId, result.sessionId)}
-              className="card p-5 cursor-pointer animate-fade-in group hover:translate-y-[-2px]"
-              style={{ animationDelay: `${idx * 40}ms` }}
+              className="card p-5 cursor-pointer group hover:translate-y-[-2px]"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">

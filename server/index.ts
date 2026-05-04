@@ -18,10 +18,11 @@ import { join } from 'path';
 
 import { config } from './utils/config.js';
 import { logger } from './utils/logger.js';
+import { ensureCacheDirs } from './utils/cache-paths.js';
 import { requireAuth } from './auth/middleware.js';
 import { isSetupRequired } from './auth/service.js';
 import { startWatcher, addSSEClient } from './services/file-watcher.js';
-import { buildIndex } from './services/search-engine.js';
+import { buildIndex, loadIndex, reconcile, persistIndex } from './services/search-engine.js';
 
 import authRoutes from './routes/auth.js';
 import sessionRoutes from './routes/sessions.js';
@@ -46,6 +47,21 @@ app.use(helmet({
   },
 }));
 app.use(cors({ origin: false })); // Disable CORS in production / 生产环境禁用 CORS
+
+// Server-Timing for slow-endpoint visibility (skips SSE stream)
+// Server-Timing 暴露端点耗时；跳过 SSE 流以免阻塞头部
+app.use((req, res, next) => {
+  if (req.path === '/api/v1/events') return next();
+  const t0 = performance.now();
+  res.on('finish', () => {
+    const dur = (performance.now() - t0).toFixed(1);
+    // Header may already be flushed for streaming responses; ignore errors
+    // 流式响应可能已发送头部，忽略错误
+    try { res.setHeader('Server-Timing', `total;dur=${dur}`); } catch { /* ignore */ }
+  });
+  next();
+});
+
 app.use(compression());
 app.use(express.json({ limit: '1mb' }));
 
@@ -122,6 +138,9 @@ async function start(): Promise<void> {
     process.exit(1);
   }
 
+  // Prepare cache directories / 准备缓存目录
+  ensureCacheDirs();
+
   const projectsDir = join(config.claudeDir, 'projects');
   if (!existsSync(projectsDir)) {
     logger.warn(`No projects directory found at ${projectsDir}`);
@@ -133,11 +152,20 @@ async function start(): Promise<void> {
     startWatcher();
   }
 
-  // Build search index in background / 后台构建搜索索引
+  // Search index: try to load from disk first; fall back to full build.
+  // After either path, reconcile against the current filesystem to pick up
+  // changes that happened while the server was down.
+  // 搜索索引：先尝试加载磁盘缓存，缺失则全量重建；之后调和差异
   if (config.enableSearch) {
-    buildIndex().catch((err) => {
-      logger.error(`Search index build failed: ${err}`);
-    });
+    (async () => {
+      try {
+        const loaded = await loadIndex();
+        if (!loaded) await buildIndex();
+        await reconcile();
+      } catch (err) {
+        logger.error(`Search index init failed: ${err}`);
+      }
+    })();
   }
 
   // Start HTTP server / 启动 HTTP 服务器
@@ -163,15 +191,18 @@ async function start(): Promise<void> {
 }
 
 // Handle graceful shutdown / 优雅关闭
-process.on('SIGINT', () => {
-  logger.info('Shutting down... / 正在关闭...');
+async function shutdown(signal: string): Promise<void> {
+  logger.info(`Shutting down (${signal})... / 正在关闭...`);
+  try {
+    await persistIndex();
+  } catch (err) {
+    logger.error(`Shutdown persist failed: ${err}`);
+  }
   process.exit(0);
-});
+}
 
-process.on('SIGTERM', () => {
-  logger.info('Shutting down... / 正在关闭...');
-  process.exit(0);
-});
+process.on('SIGINT', () => { void shutdown('SIGINT'); });
+process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
 
 start().catch((err) => {
   logger.error(`Failed to start: ${err}`);

@@ -6,8 +6,9 @@
  * 支持 3 种视图模式：完整、精简（用户+命令）、变更（文件差异）
  */
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Virtuoso } from 'react-virtuoso';
 import {
   ArrowLeft, User, Bot, Terminal, AlertTriangle,
   Copy, Check, ChevronDown, ChevronRight, Shield,
@@ -16,6 +17,7 @@ import {
 import { sessions as sessionsApi, type ParsedMessage, type ContentBlock } from '../utils/api';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import DialogUserRow from './DialogUserRow';
 
 type ViewMode = 'full' | 'dialog' | 'compact' | 'changes';
 
@@ -24,32 +26,53 @@ interface Props {
   sessionId: string;
   onBack: () => void;
   onViewAudit?: () => void;
+  /**
+   * Layout calls this with a `${projectId}/${sessionId}` key and a fn that
+   * triggers the live-append fetch. Returning the unregister cleanup keeps
+   * the contract symmetric with useEffect.
+   * Layout 注入：注册当前会话的实时追加回调，返回反注册函数
+   */
+  registerLiveAppend?: (key: string, fn: () => void) => () => void;
 }
 
 // Configure marked for safe rendering / 配置 marked 安全渲染
 marked.setOptions({ gfm: true, breaks: true });
 
-// Markdown render cache to avoid re-parsing on each render / Markdown 缓存避免重复解析
+// LRU markdown render cache. Move-to-front on hit so frequently re-rendered
+// blocks survive eviction; on overflow drop the oldest single entry rather
+// than wiping the whole cache (the previous clear() caused full re-parses
+// for entire long sessions).
+// Map iteration order is insertion order, so .keys().next() is the LRU.
+// LRU markdown 缓存：命中时刷新位置；溢出时只逐出最旧一个，避免整库失效
+const MD_CACHE_LIMIT = 2000;
 const mdCache = new Map<string, string>();
 function renderMarkdown(text: string): string {
   const cached = mdCache.get(text);
-  if (cached) return cached;
+  if (cached !== undefined) {
+    // Move-to-front: re-insert promotes the entry to the most recent slot
+    // 移到最新位置——保持热数据不被淘汰
+    mdCache.delete(text);
+    mdCache.set(text, cached);
+    return cached;
+  }
+  const raw = marked.parse(text) as string;
   // All HTML is sanitized via DOMPurify to prevent XSS
   // 所有 HTML 通过 DOMPurify 消毒以防止 XSS
-  const raw = marked.parse(text) as string;
   const result = DOMPurify.sanitize(raw);
-  // Cap cache size to prevent memory leaks / 限制缓存大小防止内存泄漏
-  if (mdCache.size > 2000) mdCache.clear();
+  if (mdCache.size >= MD_CACHE_LIMIT) {
+    const oldest = mdCache.keys().next().value;
+    if (oldest !== undefined) mdCache.delete(oldest);
+  }
   mdCache.set(text, result);
   return result;
 }
 
-// Page size for progressive rendering / 渐进渲染每页大小
-const PAGE_SIZE = 50;
+// Page size for incremental message fetch / 切片拉取每页大小
+const PAGE_SIZE = 200;
 
 // --- Shared sub-components / 共享子组件 ---
 
-function ToolUseBlock({ block, defaultExpanded = false }: { block: ContentBlock; defaultExpanded?: boolean }) {
+const ToolUseBlock = memo(function ToolUseBlock({ block, defaultExpanded = false }: { block: ContentBlock; defaultExpanded?: boolean }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
   const input = block.input || {};
@@ -80,9 +103,9 @@ function ToolUseBlock({ block, defaultExpanded = false }: { block: ContentBlock;
       )}
     </div>
   );
-}
+});
 
-function ToolResultBlock({ block }: { block: ContentBlock }) {
+const ToolResultBlock = memo(function ToolResultBlock({ block }: { block: ContentBlock }) {
   const [expanded, setExpanded] = useState(false);
 
   const content = typeof block.content === 'string'
@@ -118,11 +141,11 @@ function ToolResultBlock({ block }: { block: ContentBlock }) {
       )}
     </div>
   );
-}
+});
 
 // --- Full view message bubble / 完整视图消息气泡 ---
 
-function MessageBubble({ message }: { message: ParsedMessage }) {
+const MessageBubble = memo(function MessageBubble({ message }: { message: ParsedMessage }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
@@ -205,7 +228,7 @@ function MessageBubble({ message }: { message: ParsedMessage }) {
       )}
     </div>
   );
-}
+}, (prev, next) => prev.message.uuid === next.message.uuid);
 
 // --- Compact view / 精简视图 ---
 
@@ -266,7 +289,7 @@ function buildCompactGroups(messages: ParsedMessage[]): CompactGroup[] {
   return groups;
 }
 
-function CompactGroupView({ group, idx }: { group: CompactGroup; idx: number }) {
+const CompactGroupView = memo(function CompactGroupView({ group }: { group: CompactGroup }) {
   const { t } = useTranslation();
   const [showAssistant, setShowAssistant] = useState(false);
 
@@ -281,7 +304,7 @@ function CompactGroupView({ group, idx }: { group: CompactGroup; idx: number }) 
     : '';
 
   return (
-    <div className="animate-fade-in" style={{ animationDelay: `${idx * 40}ms` }}>
+    <div className="animate-fade-in">
       {/* User input / 用户输入 */}
       <div className="flex items-center gap-2 mb-1.5">
         <User size={14} style={{ color: 'var(--status-info)' }} />
@@ -328,7 +351,8 @@ function CompactGroupView({ group, idx }: { group: CompactGroup; idx: number }) 
       ))}
     </div>
   );
-}
+}, (prev, next) => prev.group.userMessage.uuid === next.group.userMessage.uuid
+  && prev.group.commandCount === next.group.commandCount);
 
 // --- Changes view / 变更视图 ---
 
@@ -388,7 +412,7 @@ function extractFileChanges(messages: ParsedMessage[]): FileChange[] {
   return changes;
 }
 
-function FileChangeCard({ change, idx }: { change: FileChange; idx: number }) {
+const FileChangeCard = memo(function FileChangeCard({ change }: { change: FileChange }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(true);
 
@@ -396,7 +420,7 @@ function FileChangeCard({ change, idx }: { change: FileChange; idx: number }) {
   const dirPath = change.filePath.replace(/\/[^/]+$/, '');
 
   return (
-    <div className="change-card animate-fade-in" style={{ animationDelay: `${idx * 50}ms` }}>
+    <div className="change-card animate-fade-in">
       <div
         className="change-card-header cursor-pointer"
         onClick={() => setExpanded(!expanded)}
@@ -434,43 +458,141 @@ function FileChangeCard({ change, idx }: { change: FileChange; idx: number }) {
       )}
     </div>
   );
-}
+});
 
 // --- Main component / 主组件 ---
 
-export default function ChatViewer({ projectId, sessionId, onBack, onViewAudit }: Props) {
+export default function ChatViewer({ projectId, sessionId, onBack, onViewAudit, registerLiveAppend }: Props) {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<ParsedMessage[]>([]);
   const [meta, setMeta] = useState<Record<string, unknown> | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('full');
-  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  const virtuosoRef = useRef<{ scrollToIndex: (i: { index: number; behavior?: 'smooth' | 'auto'; align?: 'start' | 'center' | 'end' }) => void } | null>(null);
+  const cursorRef = useRef<string | null>(null);
+  const loadingMoreRef = useRef(false);
+  // Refs for the live-append closure to read the most recent state without
+  // re-subscribing on every render.
+  // 实时追加闭包用 ref 读最新状态，避免每次 render 重订阅
+  const messagesRef = useRef<ParsedMessage[]>([]);
+  const atBottomRef = useRef(true);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { atBottomRef.current = atBottom; }, [atBottom]);
 
   useEffect(() => {
+    const ctrl = new AbortController();
     setLoading(true);
     setError(null);
-    setDisplayCount(PAGE_SIZE);
-    sessionsApi.get(projectId, sessionId)
+    setMessages([]);
+    setNextCursor(null);
+    cursorRef.current = null;
+
+    sessionsApi.get(projectId, sessionId, ctrl.signal)
       .then((data) => {
         setMessages(data.messages);
         setMeta(data.meta as unknown as Record<string, unknown>);
+        setNextCursor(data.nextCursor);
+        cursorRef.current = data.nextCursor;
       })
-      .catch((err) => setError(err.message))
+      .catch((err) => {
+        // Ignore abort errors triggered by quick session switches
+        // 快速切换会话时忽略 abort 错误
+        if ((err as { name?: string }).name === 'AbortError') return;
+        setError((err as Error).message);
+      })
       .finally(() => setLoading(false));
+
+    return () => ctrl.abort();
   }, [projectId, sessionId]);
 
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-    setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 200);
-  }, []);
+  const loadMore = useCallback(async () => {
+    if (loadingMoreRef.current) return;
+    const cursor = cursorRef.current;
+    if (!cursor) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const slice = await sessionsApi.messages(projectId, sessionId, {
+        after: cursor,
+        limit: PAGE_SIZE,
+      });
+      setMessages((prev) => prev.concat(slice.messages));
+      setNextCursor(slice.nextCursor);
+      cursorRef.current = slice.nextCursor;
+    } catch (err) {
+      if ((err as { name?: string }).name !== 'AbortError') {
+        console.error('Failed to load more messages:', err);
+      }
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [projectId, sessionId]);
+
+  // Subscribe to SSE-driven live-append for this exact session.
+  // Cursor monotonicity: only fetch after the current tail (last loaded msg).
+  // If the user has paginated all the way to nextCursor=null AND there are
+  // newer messages on disk, this fetch picks them up via the last uuid in state.
+  // 订阅当前会话的实时追加；以已加载尾巴 uuid 作为 cursor，单调推进
+  useEffect(() => {
+    if (!registerLiveAppend) return;
+    const key = `${projectId}/${sessionId}`;
+    const append = async (): Promise<void> => {
+      if (loadingMoreRef.current) return;
+      const tail = messagesRef.current[messagesRef.current.length - 1];
+      if (!tail) return;
+      loadingMoreRef.current = true;
+      try {
+        const slice = await sessionsApi.messages(projectId, sessionId, {
+          after: tail.uuid,
+          limit: PAGE_SIZE,
+        });
+        if (slice.messages.length === 0) return;
+        // De-dup against in-flight pagination: only append uuids we don't have
+        // 去重（和 endReached 在途请求冲突时的兜底）
+        const known = new Set(messagesRef.current.map((m) => m.uuid));
+        const fresh = slice.messages.filter((m) => !known.has(m.uuid));
+        if (fresh.length === 0) return;
+        setMessages((prev) => prev.concat(fresh));
+        // Only advance the user-pagination cursor if we already exhausted it;
+        // otherwise the existing nextCursor still points to the user-visible tail.
+        // 仅当用户翻页 cursor 已耗尽才推进；否则保持原 cursor
+        if (cursorRef.current === null) {
+          setNextCursor(slice.nextCursor);
+          cursorRef.current = slice.nextCursor;
+        }
+        if (atBottomRef.current && virtuosoRef.current) {
+          // Defer scroll to next frame so Virtuoso has measured the new rows
+          // 推迟到下一帧，等 Virtuoso 完成测量
+          setTimeout(() => virtuosoRef.current?.scrollToIndex({
+            index: messagesRef.current.length - 1,
+            behavior: 'smooth',
+            align: 'end',
+          }), 30);
+        }
+      } catch (err) {
+        if ((err as { name?: string }).name !== 'AbortError') {
+          console.error('live-append failed:', err);
+        }
+      } finally {
+        loadingMoreRef.current = false;
+      }
+    };
+    return registerLiveAppend(key, append);
+  }, [projectId, sessionId, registerLiveAppend]);
 
   const scrollToBottom = useCallback(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, []);
+    virtuosoRef.current?.scrollToIndex({
+      index: Math.max(0, messages.length - 1),
+      behavior: 'smooth',
+      align: 'end',
+    });
+  }, [messages.length]);
 
   const visibleMessages = useMemo(
     () => messages.filter((m) => {
@@ -580,11 +702,11 @@ export default function ChatViewer({ projectId, sessionId, onBack, onViewAudit }
       </div>
 
       {/* Content area / 内容区域 */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-8 py-6 space-y-5 relative">
+      <div className="flex-1 overflow-hidden relative">
         {loading && (
-          <div className="space-y-4">
+          <div className="px-8 py-6 space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="skeleton h-20 rounded-md" style={{ animationDelay: `${i * 100}ms` }} />
+              <div key={i} className="skeleton h-20 rounded-md" />
             ))}
           </div>
         )}
@@ -599,106 +721,84 @@ export default function ChatViewer({ projectId, sessionId, onBack, onViewAudit }
           </div>
         )}
 
-        {/* Full view (paginated) / 完整视图（分页渲染） */}
+        {/* Full view — virtualized / 完整视图（虚拟化） */}
         {!loading && !error && viewMode === 'full' && (
-          <>
-            {visibleMessages.length === 0 && (
-              <div className="empty-state">
-                <div className="empty-state-icon"><Bot size={28} /></div>
-                <p className="text-sm">{t('chat.no_messages')}</p>
-              </div>
-            )}
-            {visibleMessages.slice(0, displayCount).map((msg, idx) => (
-              <div key={msg.uuid}>
-                {idx > 0 && msg.role === 'user' && <div className="msg-divider" />}
-                <MessageBubble message={msg} />
-              </div>
-            ))}
-            {visibleMessages.length > displayCount && (
-              <button
-                onClick={() => setDisplayCount((c) => c + PAGE_SIZE)}
-                className="btn btn-ghost w-full py-3 text-sm"
-                style={{ color: 'var(--accent)' }}
-              >
-                Load more ({visibleMessages.length - displayCount} remaining)
-              </button>
-            )}
-          </>
+          visibleMessages.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon"><Bot size={28} /></div>
+              <p className="text-sm">{t('chat.no_messages')}</p>
+            </div>
+          ) : (
+            <Virtuoso
+              ref={virtuosoRef as never}
+              style={{ height: '100%' }}
+              className="px-8 py-6"
+              data={visibleMessages}
+              endReached={loadMore}
+              increaseViewportBy={{ top: 400, bottom: 800 }}
+              atBottomStateChange={setAtBottom}
+              rangeChanged={(range) => setShowScrollBtn(range.endIndex < visibleMessages.length - 5)}
+              computeItemKey={(_idx, msg) => msg.uuid}
+              itemContent={(idx, msg) => (
+                <div className="pb-5">
+                  {idx > 0 && msg.role === 'user' && <div className="msg-divider" />}
+                  <MessageBubble message={msg} />
+                </div>
+              )}
+              components={{
+                Footer: () => (loadingMore || nextCursor)
+                  ? <div className="text-center py-4 text-2xs" style={{ color: 'var(--txt-3)' }}>
+                      {loadingMore ? '...' : ''}
+                    </div>
+                  : null,
+              }}
+            />
+          )
         )}
 
-        {/* Dialog view (user input only) / 对话视图（仅用户输入） */}
+        {/* Dialog view (user input only) / 对话视图（仅用户输入；条目通常较少，不虚拟化） */}
         {!loading && !error && viewMode === 'dialog' && (
-          <>
+          <div className="h-full overflow-y-auto px-8 py-6 space-y-5">
             {userMessages.length === 0 && (
               <div className="empty-state">
                 <div className="empty-state-icon"><User size={28} /></div>
                 <p className="text-sm">{t('chat.no_messages')}</p>
               </div>
             )}
-            {userMessages.map((msg, idx) => {
-              const userText = msg.content
-                .filter((b): b is ContentBlock & { type: 'text' } => b.type === 'text')
-                .map((b) => b.text || '')
-                .join('\n');
-              const sanitizedHtml = userText ? renderMarkdown(userText) : '';
-
-              return (
-                <div key={msg.uuid} className="animate-fade-in" style={{ animationDelay: `${idx * 40}ms` }}>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <User size={14} style={{ color: 'var(--status-info)' }} />
-                    <span
-                      className="text-2xs font-medium px-1.5 py-0.5 rounded"
-                      style={{ background: 'var(--surface-2)', color: 'var(--txt-3)', fontFamily: 'JetBrains Mono, monospace' }}
-                    >
-                      #{idx + 1}
-                    </span>
-                    <span className="text-2xs" style={{ color: 'var(--txt-3)' }}>
-                      {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ''}
-                    </span>
-                  </div>
-                  {sanitizedHtml && (
-                    <div
-                      className="msg-user rounded-md p-3 markdown-body"
-                      dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
-                    />
-                  )}
-                  {idx < userMessages.length - 1 && <div className="msg-divider" />}
-                </div>
-              );
-            })}
-          </>
-        )}
-
-        {/* Compact view / 精简视图 */}
-        {!loading && !error && viewMode === 'compact' && (
-          <>
-            {compactGroups.length === 0 && (
-              <div className="empty-state">
-                <div className="empty-state-icon"><Zap size={28} /></div>
-                <p className="text-sm">{t('chat.no_commands_compact')}</p>
-              </div>
-            )}
-            {compactGroups.slice(0, displayCount).map((group, idx) => (
-              <div key={group.userMessage.uuid}>
-                {idx > 0 && <div className="msg-divider" />}
-                <CompactGroupView group={group} idx={idx} />
-              </div>
+            {userMessages.map((msg, idx) => (
+              <DialogUserRow key={msg.uuid} msg={msg} index={idx} isLast={idx === userMessages.length - 1} />
             ))}
-            {compactGroups.length > displayCount && (
-              <button
-                onClick={() => setDisplayCount((c) => c + PAGE_SIZE)}
-                className="btn btn-ghost w-full py-3 text-sm"
-                style={{ color: 'var(--accent)' }}
-              >
-                Load more ({compactGroups.length - displayCount} remaining)
-              </button>
-            )}
-          </>
+          </div>
         )}
 
-        {/* Changes view / 变更视图 */}
+        {/* Compact view — virtualized / 精简视图（虚拟化） */}
+        {!loading && !error && viewMode === 'compact' && (
+          compactGroups.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon"><Zap size={28} /></div>
+              <p className="text-sm">{t('chat.no_commands_compact')}</p>
+            </div>
+          ) : (
+            <Virtuoso
+              style={{ height: '100%' }}
+              className="px-8 py-6"
+              data={compactGroups}
+              endReached={loadMore}
+              increaseViewportBy={{ top: 400, bottom: 800 }}
+              computeItemKey={(_idx, group) => group.userMessage.uuid}
+              itemContent={(idx, group) => (
+                <div className="pb-5">
+                  {idx > 0 && <div className="msg-divider" />}
+                  <CompactGroupView group={group} />
+                </div>
+              )}
+            />
+          )
+        )}
+
+        {/* Changes view / 变更视图（条目数有限，不虚拟化） */}
         {!loading && !error && viewMode === 'changes' && (
-          <>
+          <div className="h-full overflow-y-auto px-8 py-6 space-y-5">
             {fileChanges.length === 0 && (
               <div className="empty-state">
                 <div className="empty-state-icon"><FileCode size={28} /></div>
@@ -722,15 +822,15 @@ export default function ChatViewer({ projectId, sessionId, onBack, onViewAudit }
             )}
             <div className="space-y-3">
               {fileChanges.map((change, idx) => (
-                <FileChangeCard key={`${change.filePath}-${idx}`} change={change} idx={idx} />
+                <FileChangeCard key={`${change.filePath}-${idx}`} change={change} />
               ))}
             </div>
-          </>
+          </div>
         )}
       </div>
 
       {/* Scroll to bottom / 滚到底部 */}
-      {showScrollBtn && (
+      {showScrollBtn && !atBottom && (
         <button onClick={scrollToBottom} className="scroll-bottom-btn animate-fade-in" style={{ position: 'absolute', bottom: 24, right: 24 }}>
           <ArrowDown size={16} />
         </button>

@@ -27,5 +27,17 @@ export default defineConfig({
     outDir: 'dist/client',
     emptyOutDir: true,
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Split heavy deps so the main bundle stays small and route-level
+        // imports can warm caches independently.
+        // 拆分重依赖，主 chunk 保持精简，路由级懒加载可独立缓存
+        manualChunks: {
+          markdown: ['marked', 'dompurify'],
+          virt: ['react-virtuoso'],
+          icons: ['lucide-react'],
+        },
+      },
+    },
   },
 });

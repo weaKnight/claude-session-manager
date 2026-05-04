@@ -31,6 +31,7 @@
     "jsonwebtoken": "^9.0.2",
     "marked": "^14.1.0",
     "minisearch": "^7.1.0",
+    "react-virtuoso": "^4.10.1",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
@@ -57,7 +58,6 @@
     "react-dom": "^18.3.1",
     "react-i18next": "^15.0.1",
     "react-router-dom": "^6.26.2",
-    "react-virtuoso": "^4.10.1",
     "tailwindcss": "^3.4.10",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4",
