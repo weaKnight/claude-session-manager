@@ -16,7 +16,7 @@ A self-hosted web tool for browsing, searching, and auditing Claude Code convers
 ## Key Architecture Decisions
 
 1. **Read-only access to ~/.claude** — The app NEVER writes to the Claude data directory. Deleted sessions are moved to ~/.claude-session-manager/trash/.
-2. **Single process** — No database, no Redis. Everything runs in one Node.js process with in-memory caching.
+2. **Single process, layered caching** — No database, no Redis. One Node.js process backed by in-memory mirrors plus persistent on-disk caches under `~/.claude-session-manager/cache/` (meta, offsets, search). See [docs/architecture.md](docs/architecture.md) for the data flow and why each cache exists.
 3. **Embedded frontend** — `npm run build` produces dist/client/ which the Express server serves as static files. No separate nginx needed for dev.
 4. **Path traversal security** — All project/session IDs are validated with `^[A-Za-z0-9_.-]+$` before use in file paths.
 
@@ -37,22 +37,41 @@ Sub-agent sessions are named `agent-{shortId}.jsonl`.
 ## File Layout
 
 ```
-server/index.ts          — Express app entry point
-server/auth/service.ts   — bcrypt + JWT logic
-server/auth/middleware.ts — requireAuth middleware
-server/parser/jsonl-reader.ts — JSONL streaming parser
-server/parser/message-types.ts — TypeScript type definitions
-server/services/session-manager.ts — Project/session CRUD
-server/services/search-engine.ts — MiniSearch wrapper
-server/services/file-watcher.ts — chokidar + SSE broadcast
-server/routes/auth.ts    — POST /api/v1/auth/*
-server/routes/sessions.ts — GET/DELETE /api/v1/projects/*, /api/v1/sessions/*
-server/routes/search.ts  — GET /api/v1/search
-src/App.tsx              — Auth gate → Login or Layout
-src/components/Layout.tsx — Main shell with sidebar + content
-src/components/ChatViewer.tsx — Message renderer with Markdown
-src/components/AuditPanel.tsx — Command audit timeline
+server/index.ts                    — Express entry + bootstrap (ensureCacheDirs → watcher → loadIndex/buildIndex → reconcile; persistIndex on shutdown)
+server/auth/service.ts             — bcrypt + JWT logic; rotates JWT secret on password change
+server/auth/middleware.ts          — requireAuth middleware
+server/parser/jsonl-reader.ts      — JSONL parser: full parse, sliced parse (seek-by-byte), meta-only parse + offset anchors, command extraction
+server/parser/message-types.ts     — TypeScript type definitions
+server/services/session-manager.ts — Project/session CRUD, sliced pagination, trash, cache invalidation
+server/services/meta-cache.ts      — Persistent per-project session metadata cache (cache/meta/{projectId}.json, keyed by mtime+size)
+server/services/offset-cache.ts    — Byte-offset sidecars for seek-based pagination (cache/offsets/, anchors every 100 msgs)
+server/services/search-engine.ts   — MiniSearch index: load/build/reconcile + incremental updates + debounced persist (cache/search/)
+server/services/file-watcher.ts    — chokidar → cache invalidation + search delta + SSE broadcast
+server/utils/config.ts             — Env/CLI config, paths, client-dist resolution (Node + Bun single-binary)
+server/utils/cache-paths.ts        — Centralized cache/ directory layout under appDataDir
+server/utils/etag.ts               — Weak ETag / 304 conditional-request helpers (derived from mtime+size)
+server/utils/logger.ts             — Leveled logger
+server/routes/auth.ts              — /api/v1/auth/* (status, setup, login, change-password)
+server/routes/sessions.ts          — /api/v1/projects/*, /api/v1/sessions/* (paged detail, /messages cursor slices, /commands, trash)
+server/routes/search.ts            — GET /api/v1/search
+src/App.tsx                        — Auth gate → Login or Layout
+src/components/Layout.tsx          — Main shell with sidebar + content
+src/components/Login.tsx           — First-time password setup + login
+src/components/ProjectTree.tsx     — Project list (file-manager style)
+src/components/SessionList.tsx     — Sessions of selected project with metadata
+src/components/ChatViewer.tsx      — Virtualized (react-virtuoso) message renderer; 3 view modes; cursor-based paging
+src/components/DialogUserRow.tsx   — Single user-message row (sanitized Markdown)
+src/components/AuditPanel.tsx      — Virtualized tool_use command timeline
+src/components/SearchPanel.tsx     — Full-text search UI
+src/components/TrashPanel.tsx      — Deleted-session restore / empty trash
+src/components/ChangePasswordModal.tsx — Change password (triggers server JWT-secret rotation)
+src/hooks/useAuth.ts               — Auth state + login/logout
+src/hooks/useSSE.ts                — Subscribe to SSE live file-change events
+src/utils/api.ts                   — HTTP client with JWT auth
+src/i18n/{index.ts,en.json,zh.json} — i18next setup + translation resources
 ```
+
+> Full data-flow, caching, and pagination design lives in [docs/architecture.md](docs/architecture.md).
 
 ## Development Commands
 
