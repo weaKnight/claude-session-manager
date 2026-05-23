@@ -70,7 +70,9 @@ router.post('/change-password', async (req, res) => {
 
   const result = await changePassword(oldPassword, newPassword);
   if (result.success) {
-    res.json({ success: true });
+    // Return the re-issued token so the client can silently replace the old one
+    // 回发重新签发的 token，前端可静默替换旧 token，当前会话不掉线
+    res.json({ success: true, token: result.token });
   } else {
     res.status(400).json({ error: result.error });
   }

@@ -9,12 +9,13 @@ import { useTranslation } from 'react-i18next';
 import {
   FolderTree, Search, Shield, BarChart3, Trash2, LogOut,
   Sun, Moon, ChevronLeft, Menu, WifiOff,
-  TrendingUp, Activity, Database,
+  TrendingUp, Activity, Database, KeyRound,
 } from 'lucide-react';
 import { projects as projectsApi, invalidateEtagCache, type ProjectInfo, type SessionMeta } from '../utils/api';
 import { useSSE } from '../hooks/useSSE';
 import ProjectTree from './ProjectTree';
 import SessionList from './SessionList';
+import ChangePasswordModal from './ChangePasswordModal';
 
 // Heavy panels are route-level lazy: only fetched when first rendered.
 // 重型面板路由级懒加载——首次进入对应视图才下载
@@ -44,6 +45,7 @@ export default function Layout({ onLogout }: LayoutProps) {
     (!localStorage.getItem('csm_dark') && window.matchMedia('(prefers-color-scheme: dark)').matches)
   );
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showChangePw, setShowChangePw] = useState(false);
   const [view, setView] = useState<View>('projects');
   const [projectList, setProjectList] = useState<ProjectInfo[]>([]);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
@@ -273,6 +275,14 @@ export default function Layout({ onLogout }: LayoutProps) {
             <button onClick={toggleLang} className="btn btn-ghost !py-2.5 !px-3" title="Language">
               <span className="text-[12px] font-bold">{i18n.language.startsWith('zh') ? 'EN' : '中'}</span>
             </button>
+            <button
+              onClick={() => setShowChangePw(true)}
+              className="btn btn-ghost !py-2.5 !px-3"
+              title={t('auth.change_password')}
+              data-testid="open-change-pw"
+            >
+              <KeyRound size={16} />
+            </button>
             <button onClick={onLogout} className="btn btn-ghost !py-2.5 !px-3" title={t('auth.logout')}>
               <LogOut size={16} />
             </button>
@@ -490,6 +500,9 @@ export default function Layout({ onLogout }: LayoutProps) {
           )}
         </div>
       </main>
+
+      {/* Change password modal / 修改密码模态框 */}
+      {showChangePw && <ChangePasswordModal onClose={() => setShowChangePw(false)} />}
     </div>
   );
 }

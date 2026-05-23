@@ -15,7 +15,14 @@
     "login_btn": "Sign In",
     "password_min": "At least 8 characters",
     "locked": "Account locked. Try again later.",
-    "invalid": "Invalid password"
+    "invalid": "Invalid password",
+    "change_password": "Change Password",
+    "current_password": "Current Password",
+    "new_password": "New Password",
+    "confirm_password": "Confirm New Password",
+    "password_mismatch": "The new passwords do not match.",
+    "change_btn": "Update Password",
+    "change_success": "Password updated. Other sessions have been signed out."
   },
   "nav": {
     "projects": "Projects",

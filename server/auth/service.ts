@@ -152,11 +152,16 @@ export function verifyToken(token: string): boolean {
 
 /**
  * Change password / 修改密码
+ * On success, rotates the JWT secret (invalidating all previously issued
+ * tokens) and re-issues a fresh token for the current operator so they stay
+ * logged in. See CSM_SECRET caveat below.
+ * 成功时轮换 JWT 密钥（使此前签发的所有 token 失效），并为当前操作者重新签发
+ * 一个新 token 以保持登录。CSM_SECRET 的边界见下方说明。
  */
 export async function changePassword(
   oldPassword: string,
   newPassword: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; token?: string; error?: string }> {
   if (!existsSync(config.authFile)) {
     return { success: false, error: 'Not configured / 未配置' };
   }
@@ -172,8 +177,29 @@ export async function changePassword(
   }
 
   authData.passwordHash = await bcrypt.hash(newPassword, 12);
+  // Rotate the JWT secret so previously issued tokens are invalidated.
+  // 轮换 JWT 密钥，使此前签发的 token 立即失效。
+  authData.jwtSecret = randomBytes(32).toString('hex');
   writeFileSync(config.authFile, JSON.stringify(authData, null, 2), { mode: 0o600 });
   logger.success('Password changed / 密码已修改');
 
-  return { success: true };
+  if (config.jwtSecret) {
+    // CSM_SECRET env overrides the file secret, so rotating the stored secret
+    // cannot invalidate existing tokens at runtime — they stay valid until
+    // natural expiry. Operators must change CSM_SECRET and restart to revoke.
+    // 设置了 CSM_SECRET 时签名密钥恒为 env 值，轮换存储的密钥无法在运行时使旧
+    // token 失效，它们会保留到自然过期；需更换 CSM_SECRET 并重启才能吊销。
+    logger.warn('CSM_SECRET is set: existing tokens remain valid until expiry / 已设置 CSM_SECRET，旧 token 将保留到自然过期');
+  }
+
+  // Re-issue a fresh token for the current operator so they stay logged in.
+  // 为当前操作者重新签发 token，使其保持登录（基于轮换后的密钥）。
+  const secret = getJwtSecret();
+  const token = jwt.sign(
+    { iss: 'claude-session-manager', iat: Math.floor(Date.now() / 1000) },
+    secret as jwt.Secret,
+    { expiresIn: config.jwtExpiry } as jwt.SignOptions
+  );
+
+  return { success: true, token };
 }

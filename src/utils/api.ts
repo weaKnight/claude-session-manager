@@ -120,6 +120,15 @@ export const auth = {
       method: 'POST',
       body: JSON.stringify({ password }),
     }),
+
+  // Change password; on success the server rotates its secret and returns a
+  // fresh token the caller must store to keep the current session alive.
+  // 修改密码；成功时服务端轮换密钥并回发新 token，调用方需存下它以保持当前会话。
+  changePassword: (oldPassword: string, newPassword: string) =>
+    request<{ success: boolean; token?: string; error?: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ oldPassword, newPassword }),
+    }),
 };
 
 // --- Projects API / 项目接口 ---
