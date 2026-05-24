@@ -1,6 +1,6 @@
 {
   "name": "claude-session-manager",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Web-based session manager for Claude Code conversation history / Claude Code 历史会话管理 Web 工具",
   "type": "module",
   "scripts": {

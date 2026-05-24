@@ -174,7 +174,7 @@ async function start(): Promise<void> {
 
     logger.success('');
     logger.success('╔══════════════════════════════════════════════╗');
-    logger.success('║       Claude Session Manager  v1.0.0        ║');
+    logger.success('║       Claude Session Manager  v1.1.0        ║');
     logger.success('╚══════════════════════════════════════════════╝');
     logger.success('');
     logger.info(`Server:    http://${config.host}:${config.port} ${setupStatus}`);
