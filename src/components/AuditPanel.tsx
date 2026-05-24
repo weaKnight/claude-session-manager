@@ -72,12 +72,12 @@ const TimelineRow = memo(function TimelineRow({ cmd, idx, expanded, onToggle }: 
             {cmd.timestamp ? new Date(cmd.timestamp).toLocaleTimeString() : ''}
           </span>
         </div>
-        {(cmd.toolName === 'Bash' || cmd.toolName === 'bash') && cmd.input.command && (
+        {(cmd.toolName === 'Bash' || cmd.toolName === 'bash') && typeof cmd.input.command === 'string' && (
           <code
             className="block text-2xs mt-1.5 truncate"
             style={{ color: 'var(--txt-2)', fontFamily: "'JetBrains Mono', monospace" }}
           >
-            $ {(cmd.input.command as string).split('\n')[0].slice(0, 100)}
+            $ {cmd.input.command.split('\n')[0].slice(0, 100)}
           </code>
         )}
         {expanded && (
