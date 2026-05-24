@@ -57,6 +57,30 @@ function normalizeContent(content: unknown): ContentBlock[] {
 }
 
 /**
+ * Decide whether a user message carries real text input (vs. pure tool_result).
+ * 判断一条 user 消息是否含真实文字输入（区别于纯 tool_result）
+ *
+ * - string content with non-whitespace → true
+ * - array content with at least one non-empty text block → true
+ * - otherwise (e.g. only tool_result blocks) → false
+ */
+function isRealUserText(content: unknown): boolean {
+  if (typeof content === 'string') {
+    return content.trim().length > 0;
+  }
+  if (Array.isArray(content)) {
+    return content.some(
+      (b) =>
+        b &&
+        (b as Record<string, unknown>).type === 'text' &&
+        typeof (b as Record<string, unknown>).text === 'string' &&
+        ((b as Record<string, unknown>).text as string).trim().length > 0,
+    );
+  }
+  return false;
+}
+
+/**
  * Stream-parse a single JSONL file and return session metadata + messages
  * 流式解析单个 JSONL 文件，返回会话元数据和消息
  */
@@ -73,6 +97,9 @@ export async function parseSessionFile(filePath: string): Promise<ParsedSession>
     cache_creation_input_tokens: 0,
     cache_read_input_tokens: 0,
   };
+  let userMessageCount = 0;     // User msgs with real text / 含真实文字的 user 消息数
+  let nonEmptyLineCount = 0;    // Lines with content / 非空行数
+  let parsedLineCount = 0;      // Lines that JSON.parse OK / 解析成功的行数
 
   const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
   const rl = createInterface({ input: fileStream, crlfDelay: Infinity });
@@ -81,6 +108,7 @@ export async function parseSessionFile(filePath: string): Promise<ParsedSession>
 
   for await (const line of rl) {
     if (!line.trim()) continue;
+    nonEmptyLineCount++;
 
     let entry: JsonlEntry;
     try {
@@ -89,6 +117,7 @@ export async function parseSessionFile(filePath: string): Promise<ParsedSession>
       // Skip malformed lines / 跳过格式错误的行
       continue;
     }
+    parsedLineCount++;
 
     lineCount++;
 
@@ -120,6 +149,11 @@ export async function parseSessionFile(filePath: string): Promise<ParsedSession>
       if (role === 'user' || role === 'assistant' || role === 'system') {
         const contentBlocks = normalizeContent(msg.content);
         const usage = msg.usage as TokenUsage | undefined;
+
+        // Count user messages that carry real text input / 统计含真实文字的 user 消息
+        if (role === 'user' && isRealUserText(msg.content)) {
+          userMessageCount++;
+        }
 
         // Accumulate token usage / 累计 token 用量
         if (usage) {
@@ -166,6 +200,9 @@ export async function parseSessionFile(filePath: string): Promise<ParsedSession>
     isAgent: fileName.startsWith('agent-'),
     totalTokens,
     fileSize,
+    userMessageCount,
+    // Has non-empty lines but none parsed → corrupt / 有非空行但无一行解析成功 → 损坏
+    corrupt: nonEmptyLineCount > 0 && parsedLineCount === 0,
   };
 
   return { meta, messages };
@@ -309,6 +346,9 @@ export async function parseSessionMeta(filePath: string): Promise<{
     cache_read_input_tokens: 0,
   };
   let firstUserMsg = '';
+  let userMessageCount = 0;     // User msgs with real text / 含真实文字的 user 消息数
+  let nonEmptyLineCount = 0;    // Lines with content / 非空行数
+  let parsedLineCount = 0;      // Lines that JSON.parse OK / 解析成功的行数
 
   // Anchor bookkeeping / 锚点状态
   let byteOffset = 0;            // start-of-line byte position for the next line
@@ -319,12 +359,14 @@ export async function parseSessionMeta(filePath: string): Promise<{
     byteOffset += Buffer.byteLength(line, 'utf-8') + 1; // +1 for \n
 
     if (!line.trim()) continue;
+    nonEmptyLineCount++;
     let entry: Record<string, unknown>;
     try {
       entry = JSON.parse(line) as Record<string, unknown>;
     } catch {
       continue;
     }
+    parsedLineCount++;
 
     if (entry.timestamp && typeof entry.timestamp === 'string') {
       if (!firstTimestamp) firstTimestamp = entry.timestamp;
@@ -344,6 +386,11 @@ export async function parseSessionMeta(filePath: string): Promise<{
 
       if (role === 'user' || role === 'assistant') {
         messageCount++;
+      }
+
+      // Count user messages that carry real text input / 统计含真实文字的 user 消息
+      if (role === 'user' && isRealUserText(msg.content)) {
+        userMessageCount++;
       }
 
       // Anchor only on visible messages — matches parseSessionSlice's emit
@@ -400,6 +447,9 @@ export async function parseSessionMeta(filePath: string): Promise<{
     isAgent: fileName.startsWith('agent-'),
     totalTokens,
     fileSize,
+    userMessageCount,
+    // Has non-empty lines but none parsed → corrupt / 有非空行但无一行解析成功 → 损坏
+    corrupt: nonEmptyLineCount > 0 && parsedLineCount === 0,
   };
 
   return { meta, anchors };

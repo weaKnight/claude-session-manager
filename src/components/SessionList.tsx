@@ -5,10 +5,11 @@
  */
 
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, GitBranch, Clock, Bot, Trash2 } from 'lucide-react';
+import { MessageSquare, GitBranch, Clock, Bot, Trash2, Eraser } from 'lucide-react';
 import type { SessionMeta } from '../utils/api';
 import { sessions as sessionsApi } from '../utils/api';
 import { memo, useMemo, useState } from 'react';
+import InvalidSessionsModal from './InvalidSessionsModal';
 
 interface Props {
   sessions: SessionMeta[];
@@ -133,6 +134,8 @@ const SessionRow = memo(function SessionRow({ session, projectId, maxTokens, del
 export default function SessionList({ sessions, projectId, onSelect, onRefresh }: Props) {
   const { t } = useTranslation();
   const [deleting, setDeleting] = useState<string | null>(null);
+  // Whether the cleanup modal is open / 清理模态是否打开
+  const [showCleanup, setShowCleanup] = useState(false);
 
   // Hoist out of the row .map() — was O(N²) per row before
   // 从 .map() 内提取——之前每行重算一次 max
@@ -187,12 +190,25 @@ export default function SessionList({ sessions, projectId, onSelect, onRefresh }
               {sessions.length} {sessions.length === 1 ? 'conversation' : 'conversations'} in this project
             </p>
           </div>
-          <span
-            className="text-[12px] font-mono font-bold px-4 py-2 rounded-full"
-            style={{ background: 'var(--accent-muted)', color: 'var(--accent)' }}
-          >
-            {sessions.length.toString().padStart(2, '0')}
-          </span>
+          <div className="flex items-center gap-3">
+            {projectId && (
+              <button
+                onClick={() => setShowCleanup(true)}
+                className="btn btn-ghost !text-[13px] !font-semibold"
+                title={t('sessions.clean_invalid')}
+                data-testid="clean-invalid-btn"
+              >
+                <Eraser size={16} />
+                {t('sessions.clean_invalid')}
+              </button>
+            )}
+            <span
+              className="text-[12px] font-mono font-bold px-4 py-2 rounded-full"
+              style={{ background: 'var(--accent-muted)', color: 'var(--accent)' }}
+            >
+              {sessions.length.toString().padStart(2, '0')}
+            </span>
+          </div>
         </div>
 
         {sessions.length === 0 && (
@@ -218,6 +234,14 @@ export default function SessionList({ sessions, projectId, onSelect, onRefresh }
           ))}
         </div>
       </div>
+
+      {showCleanup && projectId && (
+        <InvalidSessionsModal
+          projectId={projectId}
+          onClose={() => setShowCleanup(false)}
+          onDeleted={onRefresh}
+        />
+      )}
     </div>
   );
 }

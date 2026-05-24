@@ -23,7 +23,9 @@ import { parseSessionMeta } from '../parser/jsonl-reader.js';
 import type { SessionMeta } from '../parser/message-types.js';
 import { saveOffsetIndex, evictOffsets, newOffsetIndex } from './offset-cache.js';
 
-const SCHEMA_VERSION = 1;
+// Bumped to 2: SessionMeta gained userMessageCount + corrupt fields.
+// 升到 2：SessionMeta 新增 userMessageCount + corrupt 字段，旧缓存自动失效重解析
+const SCHEMA_VERSION = 2;
 
 interface MetaCacheEntry {
   mtimeMs: number;

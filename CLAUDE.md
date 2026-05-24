@@ -42,7 +42,8 @@ server/auth/service.ts             — bcrypt + JWT logic; rotates JWT secret on
 server/auth/middleware.ts          — requireAuth middleware
 server/parser/jsonl-reader.ts      — JSONL parser: full parse, sliced parse (seek-by-byte), meta-only parse + offset anchors, command extraction
 server/parser/message-types.ts     — TypeScript type definitions
-server/services/session-manager.ts — Project/session CRUD, sliced pagination, trash, cache invalidation
+server/services/session-manager.ts — Project/session CRUD, sliced pagination, trash, invalid-session scan + batch delete, cache invalidation
+server/services/invalid-detector.ts — Pure classifier: flags sessions as empty/too_short/no_user_input/corrupt per criteria
 server/services/meta-cache.ts      — Persistent per-project session metadata cache (cache/meta/{projectId}.json, keyed by mtime+size)
 server/services/offset-cache.ts    — Byte-offset sidecars for seek-based pagination (cache/offsets/, anchors every 100 msgs)
 server/services/search-engine.ts   — MiniSearch index: load/build/reconcile + incremental updates + debounced persist (cache/search/)
@@ -52,19 +53,20 @@ server/utils/cache-paths.ts        — Centralized cache/ directory layout under
 server/utils/etag.ts               — Weak ETag / 304 conditional-request helpers (derived from mtime+size)
 server/utils/logger.ts             — Leveled logger
 server/routes/auth.ts              — /api/v1/auth/* (status, setup, login, change-password)
-server/routes/sessions.ts          — /api/v1/projects/*, /api/v1/sessions/* (paged detail, /messages cursor slices, /commands, trash)
+server/routes/sessions.ts          — /api/v1/projects/*, /api/v1/sessions/* (paged detail, /messages cursor slices, /commands, sessions/scan-invalid + batch-delete, trash + trash/batch-delete)
 server/routes/search.ts            — GET /api/v1/search
 src/App.tsx                        — Auth gate → Login or Layout
 src/components/Layout.tsx          — Main shell with sidebar + content
 src/components/Login.tsx           — First-time password setup + login
 src/components/ProjectTree.tsx     — Project list (file-manager style)
-src/components/SessionList.tsx     — Sessions of selected project with metadata
+src/components/SessionList.tsx     — Sessions of selected project with metadata; "clean up invalid sessions" entry
 src/components/ChatViewer.tsx      — Virtualized (react-virtuoso) message renderer; 3 view modes; cursor-based paging
 src/components/DialogUserRow.tsx   — Single user-message row (sanitized Markdown)
 src/components/AuditPanel.tsx      — Virtualized tool_use command timeline
 src/components/SearchPanel.tsx     — Full-text search UI
-src/components/TrashPanel.tsx      — Deleted-session restore / empty trash
+src/components/TrashPanel.tsx      — Deleted-session restore / empty trash / multi-select batch permanent delete
 src/components/ChangePasswordModal.tsx — Change password (triggers server JWT-secret rotation)
+src/components/InvalidSessionsModal.tsx — Scan → preview (reason badges) → select → batch soft-delete invalid sessions
 src/hooks/useAuth.ts               — Auth state + login/logout
 src/hooks/useSSE.ts                — Subscribe to SSE live file-change events
 src/utils/api.ts                   — HTTP client with JWT auth

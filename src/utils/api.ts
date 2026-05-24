@@ -149,10 +149,14 @@ export interface SessionMeta {
   firstTimestamp: string;
   lastTimestamp: string;
   messageCount: number;
+  // Number of real user messages / 真实用户消息条数
+  userMessageCount: number;
   summary?: string;
   cwd?: string;
   gitBranch?: string;
   isAgent: boolean;
+  // Whether the session file is corrupt / 会话文件是否损坏
+  corrupt: boolean;
   totalTokens: {
     input_tokens?: number;
     output_tokens?: number;
@@ -160,6 +164,21 @@ export interface SessionMeta {
     cache_read_input_tokens?: number;
   };
   fileSize: number;
+}
+
+// Why a session is considered invalid / 会话被判定为无效的原因
+export type InvalidReason = 'empty' | 'too_short' | 'no_user_input' | 'corrupt';
+
+// A single invalid-session hit returned by the scan / 扫描命中的单条无效会话
+export interface InvalidSessionHit {
+  id: string;
+  summary?: string;
+  messageCount: number;
+  userMessageCount: number;
+  lastTimestamp: string;
+  fileSize: number;
+  isAgent: boolean;
+  reasons: InvalidReason[];
 }
 
 export interface ContentBlock {
@@ -254,6 +273,37 @@ export const sessions = {
       `/sessions/${projectId}/${sessionId}${force ? '?force=true' : ''}`,
       { method: 'DELETE' }
     ),
+
+  // Scan a project for invalid sessions by the given criteria.
+  // 按给定条件扫描项目中的无效会话。
+  scanInvalid: (
+    projectId: string,
+    criteria: { empty: boolean; tooShort: boolean; noUserInput: boolean; corrupt: boolean; threshold: number },
+  ) =>
+    request<{ sessions: InvalidSessionHit[] }>(
+      `/projects/${projectId}/sessions/scan-invalid`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          empty: criteria.empty,
+          tooShort: criteria.tooShort,
+          noUserInput: criteria.noUserInput,
+          corrupt: criteria.corrupt,
+          threshold: criteria.threshold,
+        }),
+      },
+    ),
+
+  // Batch-delete sessions. force omitted/false = soft delete to trash.
+  // 批量删除会话。force 省略/false = 软删到回收站。
+  batchDelete: (projectId: string, sessionIds: string[], force = false) =>
+    request<{ deleted: number; results: Array<{ sessionId: string; success: boolean; error?: string }> }>(
+      `/projects/${projectId}/sessions/batch-delete`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ sessionIds, force }),
+      },
+    ),
 };
 
 export const search = {
@@ -289,6 +339,17 @@ export const trash = {
     request<{ success: boolean; deleted: number }>('/trash', {
       method: 'DELETE',
     }),
+
+  // Permanently delete selected trash items in one call.
+  // 一次性永久删除选中的回收站条目。
+  batchDelete: (fileNames: string[]) =>
+    request<{ deleted: number; results: Array<{ fileName: string; success: boolean; error?: string }> }>(
+      '/trash/batch-delete',
+      {
+        method: 'POST',
+        body: JSON.stringify({ fileNames }),
+      },
+    ),
 };
 
 export const stats = {

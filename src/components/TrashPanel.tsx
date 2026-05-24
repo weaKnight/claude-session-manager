@@ -14,11 +14,16 @@ export default function TrashPanel() {
   const [items, setItems] = useState<TrashItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [restoring, setRestoring] = useState<string | null>(null);
+  // Selected fileNames for batch permanent delete / 待批量永久删除的 fileName 集合
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchDeleting, setBatchDeleting] = useState(false);
 
   const loadTrash = useCallback(async () => {
     try {
       const { items } = await trashApi.list();
       setItems(items);
+      // Clear selection when the list reloads / 列表重载时清空选择
+      setSelected(new Set());
     } catch (err) {
       console.error('Failed to load trash:', err);
     } finally {
@@ -46,8 +51,44 @@ export default function TrashPanel() {
     try {
       await trashApi.empty();
       setItems([]);
+      setSelected(new Set());
     } catch (err) {
       console.error('Empty trash failed:', err);
+    }
+  };
+
+  const allSelected = items.length > 0 && selected.size === items.length;
+
+  // Toggle select-all across all items / 切换全选/全不选
+  const toggleSelectAll = () => {
+    setSelected(allSelected ? new Set() : new Set(items.map((it) => it.fileName)));
+  };
+
+  // Toggle a single item's selection / 切换单项选择
+  const toggleOne = (fileName: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileName)) next.delete(fileName);
+      else next.add(fileName);
+      return next;
+    });
+  };
+
+  // Permanently delete selected items / 永久删除选中条目
+  const handleBatchDelete = async () => {
+    if (batchDeleting || selected.size === 0) return;
+    const fileNames = Array.from(selected);
+    if (!confirm(t('trash.delete_selected_confirm', { count: fileNames.length }))) return;
+    setBatchDeleting(true);
+    try {
+      await trashApi.batchDelete(fileNames);
+      // Drop the deleted items locally and clear selection / 本地移除并清空选择
+      setItems((prev) => prev.filter((it) => !selected.has(it.fileName)));
+      setSelected(new Set());
+    } catch (err) {
+      console.error('Batch delete failed:', err);
+    } finally {
+      setBatchDeleting(false);
     }
   };
 
@@ -84,14 +125,35 @@ export default function TrashPanel() {
           </p>
         </div>
         {items.length > 0 && (
-          <button
-            onClick={handleEmpty}
-            className="btn btn-ghost !text-[13px] !font-semibold"
-            style={{ color: 'var(--status-err)' }}
-          >
-            <AlertTriangle size={16} />
-            {t('trash.empty')}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleSelectAll}
+              className="btn btn-ghost !text-[13px] !font-semibold"
+              data-testid="trash-select-all"
+            >
+              {allSelected ? t('trash.deselect_all') : t('trash.select_all')}
+            </button>
+            {selected.size > 0 && (
+              <button
+                onClick={handleBatchDelete}
+                disabled={batchDeleting}
+                className="btn btn-ghost !text-[13px] !font-semibold"
+                style={{ color: 'var(--status-err)', opacity: batchDeleting ? 0.5 : 1 }}
+                data-testid="trash-delete-selected"
+              >
+                {batchDeleting ? <span className="spinner" /> : <Trash2 size={16} />}
+                {t('trash.delete_selected', { count: selected.size })}
+              </button>
+            )}
+            <button
+              onClick={handleEmpty}
+              className="btn btn-ghost !text-[13px] !font-semibold"
+              style={{ color: 'var(--status-err)' }}
+            >
+              <AlertTriangle size={16} />
+              {t('trash.empty')}
+            </button>
+          </div>
         )}
       </div>
 
@@ -114,6 +176,14 @@ export default function TrashPanel() {
               style={{ animationDelay: `${idx * 40}ms` }}
             >
               <div className="flex items-center justify-between gap-4">
+                <input
+                  type="checkbox"
+                  checked={selected.has(item.fileName)}
+                  onChange={() => toggleOne(item.fileName)}
+                  style={{ accentColor: 'var(--accent)' }}
+                  data-testid="trash-item-checkbox"
+                  aria-label={item.sessionId}
+                />
                 <div className="flex-1 min-w-0">
                   <p className="text-[15px] font-semibold truncate" style={{ color: 'var(--txt-1)', letterSpacing: '-0.012em' }}>
                     {item.sessionId}
