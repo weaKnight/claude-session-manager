@@ -106,6 +106,8 @@ export interface SessionMeta {
   isAgent: boolean;          // Is sub-agent session / 是否为子 agent 会话
   totalTokens: TokenUsage;   // Aggregated token usage / 汇总 token 用量
   fileSize: number;          // File size in bytes / 文件大小（字节）
+  userMessageCount: number;  // User messages with real text (excludes pure tool_result) / 含真实文字的 user 消息数（排除纯 tool_result）
+  corrupt: boolean;          // File has non-empty lines but none parse as JSON / 文件有非空行但无一行能被 JSON.parse
 }
 
 export interface ParsedMessage {

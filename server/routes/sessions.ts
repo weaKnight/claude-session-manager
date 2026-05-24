@@ -13,12 +13,16 @@ import {
   getSessionCommands,
   softDeleteSession,
   hardDeleteSession,
+  scanInvalidSessions,
+  batchDeleteSessions,
+  deleteTrashItems,
   getStats,
   listTrash,
   restoreSession,
   emptyTrash,
   DEFAULT_MESSAGE_PAGE,
 } from '../services/session-manager.js';
+import type { InvalidCriteria } from '../services/invalid-detector.js';
 import { etagFor, handleConditional } from '../utils/etag.js';
 
 const router = Router();
@@ -43,6 +47,52 @@ router.get('/projects/:projectId/sessions', async (req, res) => {
     const status = message.includes('not found') ? 404 : 500;
     res.status(status).json({ error: message });
   }
+});
+
+// POST /api/v1/projects/:projectId/sessions/scan-invalid - Scan for invalid sessions
+// 扫描项目内的无效会话
+router.post('/projects/:projectId/sessions/scan-invalid', async (req, res) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    // Normalize booleans to strict true; parse threshold with default 1
+    // 布尔做 === true 归一；threshold 解析,缺省 1
+    const thresholdRaw = body['threshold'];
+    const threshold = typeof thresholdRaw === 'number'
+      ? thresholdRaw
+      : typeof thresholdRaw === 'string'
+        ? (parseInt(thresholdRaw, 10) || 1)
+        : 1;
+    const criteria: InvalidCriteria = {
+      empty: body['empty'] === true,
+      tooShort: body['tooShort'] === true,
+      noUserInput: body['noUserInput'] === true,
+      corrupt: body['corrupt'] === true,
+      threshold,
+    };
+
+    const sessions = await scanInvalidSessions(req.params.projectId, criteria);
+    res.json({ sessions });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.includes('not found') ? 404 : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
+// POST /api/v1/projects/:projectId/sessions/batch-delete - Batch soft/hard delete
+// 批量软/硬删除会话
+router.post('/projects/:projectId/sessions/batch-delete', (req, res) => {
+  const body = (req.body ?? {}) as { sessionIds?: unknown; force?: unknown };
+  if (!Array.isArray(body.sessionIds)) {
+    res.status(400).json({ error: 'sessionIds must be an array / sessionIds 必须为数组' });
+    return;
+  }
+  const result = batchDeleteSessions(
+    req.params.projectId,
+    body.sessionIds as string[],
+    body.force === true,
+  );
+  res.json(result);
 });
 
 // GET /api/v1/sessions/:projectId/:sessionId - First page of messages + meta
@@ -157,6 +207,18 @@ router.post('/trash/restore', (req, res) => {
   } else {
     res.status(400).json({ error: result.error });
   }
+});
+
+// POST /api/v1/trash/batch-delete - Permanently delete specific trash items
+// 批量永久删除指定回收站条目
+router.post('/trash/batch-delete', (req, res) => {
+  const body = (req.body ?? {}) as { fileNames?: unknown };
+  if (!Array.isArray(body.fileNames)) {
+    res.status(400).json({ error: 'fileNames must be an array / fileNames 必须为数组' });
+    return;
+  }
+  const result = deleteTrashItems(body.fileNames as string[]);
+  res.json(result);
 });
 
 // DELETE /api/v1/trash - Empty trash / 清空回收站

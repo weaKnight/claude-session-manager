@@ -48,7 +48,8 @@
     "delete_hard_confirm": "Permanently delete? This cannot be undone.",
     "deleted": "Session deleted",
     "view_commands": "View Commands",
-    "agent_session": "Sub-agent"
+    "agent_session": "Sub-agent",
+    "clean_invalid": "Clean Up"
   },
   "chat": {
     "user": "You",
@@ -102,7 +103,32 @@
     "restore": "Restore",
     "empty": "Empty Trash",
     "empty_confirm": "Permanently delete all items in trash? This cannot be undone.",
-    "restored": "Session restored"
+    "restored": "Session restored",
+    "select_all": "Select All",
+    "deselect_all": "Deselect All",
+    "delete_selected": "Delete Selected ({{count}})",
+    "delete_selected_confirm": "Permanently delete {{count}} selected item(s)? This cannot be undone."
+  },
+  "cleanup": {
+    "title": "Clean Up Invalid Sessions",
+    "desc": "Scan this project for sessions that are likely safe to remove.",
+    "criteria_empty": "Empty sessions",
+    "criteria_too_short": "Very short sessions",
+    "criteria_no_user_input": "No real user input",
+    "criteria_corrupt": "Corrupt or 0-byte files",
+    "threshold_label": "Min messages threshold",
+    "scan": "Scan",
+    "scanning": "Scanning...",
+    "results_count": "{{count}} session(s) matched",
+    "no_hits": "No invalid sessions found.",
+    "select_all": "Select All",
+    "deselect_all": "Deselect All",
+    "delete_selected": "Delete Selected ({{count}})",
+    "delete_confirm": "Move {{count}} selected session(s) to trash? They can be restored later.",
+    "reason_empty": "empty",
+    "reason_too_short": "too short",
+    "reason_no_user_input": "no user input",
+    "reason_corrupt": "corrupt"
   },
   "common": {
     "loading": "Loading...",

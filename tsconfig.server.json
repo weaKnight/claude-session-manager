@@ -9,6 +9,12 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    // composite is required so tsconfig.json can reference this project
+    // composite 让根 tsconfig.json 可以通过 references 合法引用本项目
+    "composite": true,
+    // Persist the incremental build info next to other build artifacts
+    // 将增量构建信息和其它产物一起放到 dist 下，保持仓库整洁
+    "tsBuildInfoFile": "./dist/server/.tsbuildinfo",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,

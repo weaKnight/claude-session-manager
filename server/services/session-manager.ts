@@ -22,6 +22,8 @@ import {
   evictProject,
 } from './meta-cache.js';
 import { loadOffsetIndex, findAnchor } from './offset-cache.js';
+import { classifySession } from './invalid-detector.js';
+import type { InvalidCriteria, InvalidReason } from './invalid-detector.js';
 import type { ProjectInfo, SessionMeta, ParsedSession, AuditCommand } from '../parser/message-types.js';
 
 /**
@@ -118,6 +120,93 @@ export async function listSessions(projectId: string): Promise<SessionMeta[]> {
   // Sort by most recent / 按时间倒序
   sessions.sort((a, b) => b.lastTimestamp.localeCompare(a.lastTimestamp));
   return sessions;
+}
+
+/**
+ * A session matched by scanInvalidSessions / scanInvalidSessions 命中的会话
+ */
+export interface InvalidSessionHit {
+  id: string;
+  summary?: string;
+  messageCount: number;
+  userMessageCount: number;
+  lastTimestamp: string;
+  fileSize: number;
+  isAgent: boolean;
+  reasons: InvalidReason[];
+}
+
+/**
+ * Scan a project for "invalid" sessions per the given criteria.
+ * Reuses the cached SessionMeta list and the pure classifySession rules.
+ * 按给定 criteria 扫描项目内的"无效"会话；复用缓存的 SessionMeta + 纯判定函数
+ */
+export async function scanInvalidSessions(
+  projectId: string,
+  criteria: InvalidCriteria,
+): Promise<InvalidSessionHit[]> {
+  if (!isValidId(projectId)) {
+    throw new Error('Invalid project ID / 无效的项目 ID');
+  }
+
+  const sessions = await listSessions(projectId);
+  const hits: InvalidSessionHit[] = [];
+
+  for (const meta of sessions) {
+    const reasons = classifySession(meta, criteria);
+    if (reasons.length === 0) continue;
+    hits.push({
+      id: meta.id,
+      summary: meta.summary,
+      messageCount: meta.messageCount,
+      userMessageCount: meta.userMessageCount,
+      lastTimestamp: meta.lastTimestamp,
+      fileSize: meta.fileSize,
+      isAgent: meta.isAgent,
+      reasons,
+    });
+  }
+
+  return hits;
+}
+
+/** Defensive cap on how many sessions one batch call may touch / 单次批量操作的上限 */
+const MAX_BATCH_SESSIONS = 5000;
+
+/**
+ * Batch soft/hard-delete sessions. Each id is deleted independently and its
+ * per-item result is collected; `deleted` is the count of successes.
+ * readOnly is enforced by the underlying soft/hardDeleteSession.
+ * 批量软/硬删除会话；逐条独立处理并收集结果，deleted 为成功条数；只读由底层拦截
+ */
+export function batchDeleteSessions(
+  projectId: string,
+  sessionIds: string[],
+  force: boolean,
+): { deleted: number; results: Array<{ sessionId: string; success: boolean; error?: string }> } {
+  const results: Array<{ sessionId: string; success: boolean; error?: string }> = [];
+
+  // Basic input validation / 入参基本校验
+  if (!Array.isArray(sessionIds)) {
+    return { deleted: 0, results };
+  }
+  if (sessionIds.length > MAX_BATCH_SESSIONS) {
+    return {
+      deleted: 0,
+      results: [{ sessionId: '', success: false, error: 'Too many sessions / 会话数量超过上限' }],
+    };
+  }
+
+  let deleted = 0;
+  for (const sessionId of sessionIds) {
+    const result = force
+      ? hardDeleteSession(projectId, sessionId)
+      : softDeleteSession(projectId, sessionId);
+    if (result.success) deleted++;
+    results.push({ sessionId, success: result.success, error: result.error });
+  }
+
+  return { deleted, results };
 }
 
 /**
@@ -417,6 +506,76 @@ export function emptyTrash(): { success: boolean; deleted: number; error?: strin
 
   logger.info(`Trash emptied: ${deleted} items`);
   return { success: true, deleted };
+}
+
+/** Defensive cap on trash batch size / 回收站批量上限 */
+const MAX_BATCH_TRASH = 5000;
+
+/**
+ * Permanently delete specific trash items by file name.
+ * Each name must match the trash naming pattern and resolve to a file that
+ * actually lives directly under config.trashDir — no path traversal allowed.
+ * 按文件名永久删除指定回收站条目；每个名字须匹配命名规则且确实位于
+ * config.trashDir 下,严禁路径穿越。
+ */
+export function deleteTrashItems(
+  fileNames: string[],
+): { deleted: number; results: Array<{ fileName: string; success: boolean; error?: string }> } {
+  const results: Array<{ fileName: string; success: boolean; error?: string }> = [];
+
+  if (config.readOnly) {
+    return {
+      deleted: 0,
+      results: [{ fileName: '', success: false, error: 'Read-only mode / 只读模式' }],
+    };
+  }
+
+  // Basic input validation / 入参基本校验
+  if (!Array.isArray(fileNames)) {
+    return { deleted: 0, results };
+  }
+  if (fileNames.length > MAX_BATCH_TRASH) {
+    return {
+      deleted: 0,
+      results: [{ fileName: '', success: false, error: 'Too many items / 条目数量超过上限' }],
+    };
+  }
+
+  let deleted = 0;
+  for (const fileName of fileNames) {
+    // Validate trash naming pattern: {projectId}__{sessionId}__{timestamp}.jsonl
+    // 校验回收站命名格式
+    const match = typeof fileName === 'string' && fileName.match(/^(.+?)__(.+?)__(\d+)\.jsonl$/);
+    if (!match) {
+      results.push({ fileName, success: false, error: 'Invalid trash item / 无效的回收站条目' });
+      continue;
+    }
+
+    // Guard against path traversal: the name must be a bare basename.
+    // 防路径穿越：必须是纯 basename(不含目录分隔)
+    if (basename(fileName) !== fileName) {
+      results.push({ fileName, success: false, error: 'Invalid trash item / 无效的回收站条目' });
+      continue;
+    }
+
+    const trashPath = join(config.trashDir, fileName);
+    if (!existsSync(trashPath)) {
+      results.push({ fileName, success: false, error: 'Trash item not found / 回收站条目不存在' });
+      continue;
+    }
+
+    try {
+      unlinkSync(trashPath);
+      deleted++;
+      results.push({ fileName, success: true });
+    } catch (err) {
+      logger.error(`Failed to delete trash item ${fileName}: ${err}`);
+      results.push({ fileName, success: false, error: 'Delete failed / 删除失败' });
+    }
+  }
+
+  logger.info(`Trash items deleted: ${deleted}/${fileNames.length}`);
+  return { deleted, results };
 }
 
 /**

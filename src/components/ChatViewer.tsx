@@ -627,6 +627,12 @@ export default function ChatViewer({ projectId, sessionId, onBack, onViewAudit, 
   const compactGroups = useMemo(() => buildCompactGroups(visibleMessages), [visibleMessages]);
   const fileChanges = useMemo(() => extractFileChanges(messages), [messages]);
 
+  // Narrow the loosely-typed meta fields (Record<string, unknown>) to strings
+  // before rendering, so JSX receives proper ReactNode values.
+  // meta 字段是 Record<string, unknown>，渲染前先收窄成 string，避免把 unknown 直接塞进 JSX
+  const summaryText = typeof meta?.summary === 'string' ? meta.summary : '';
+  const gitBranch = typeof meta?.gitBranch === 'string' ? meta.gitBranch : '';
+
   const viewModes: { id: ViewMode; icon: React.ReactNode; label: string; count?: number }[] = [
     { id: 'full', icon: <Layers size={12} />, label: t('chat.view_full') },
     { id: 'dialog', icon: <MessageSquare size={12} />, label: t('chat.view_dialog'), count: userMessages.length },
@@ -646,15 +652,15 @@ export default function ChatViewer({ projectId, sessionId, onBack, onViewAudit, 
         </button>
         <div className="flex-1 min-w-0">
           <h2 className="text-[17px] font-bold truncate leading-tight" style={{ color: 'var(--txt-1)', letterSpacing: '-0.018em' }}>
-            {(meta as Record<string, unknown>)?.summary as string || sessionId}
+            {summaryText || sessionId}
           </h2>
           <div className="flex items-center gap-3 mt-1">
             <span className="text-[12px] font-medium" style={{ color: 'var(--txt-3)' }}>
               {visibleMessages.length} {t('sessions.messages')}
             </span>
-            {(meta as Record<string, unknown>)?.gitBranch && (
+            {gitBranch && (
               <span className="text-[12px] font-medium font-mono px-2 py-0.5 rounded" style={{ background: 'var(--surface-2)', color: 'var(--txt-2)' }}>
-                {(meta as Record<string, unknown>).gitBranch as string}
+                {gitBranch}
               </span>
             )}
           </div>
@@ -678,7 +684,7 @@ export default function ChatViewer({ projectId, sessionId, onBack, onViewAudit, 
             key={mode.id}
             data-testid={`view-tab-${mode.id}`}
             data-active={viewMode === mode.id ? 'true' : 'false'}
-            onClick={() => { setViewMode(mode.id); setDisplayCount(PAGE_SIZE); }}
+            onClick={() => setViewMode(mode.id)}
             className={`view-tab ${viewMode === mode.id ? 'active' : ''}`}
           >
             {mode.icon}
