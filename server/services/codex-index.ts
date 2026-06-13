@@ -26,7 +26,12 @@ import { parseCodexSessionMeta } from '../parser/codex-reader.js';
 import { saveOffsetIndex, evictOffsets, newOffsetIndex } from './offset-cache.js';
 import type { SessionMeta, ProjectInfo } from '../parser/message-types.js';
 
-const SCHEMA_VERSION = 1;
+// Bumped to 2: SessionMeta now carries totalTokens parsed from Codex
+// token_count events; pre-bump caches stored totalTokens=0 and must be
+// discarded so every Codex file is re-parsed for real token usage.
+// 升到 2：SessionMeta 新增由 token_count 解析出的 totalTokens，旧缓存里全为 0,
+// 需让旧缓存失效以重新解析出真实 token 用量
+const SCHEMA_VERSION = 2;
 // Don't rescan the whole tree more often than this (ms) / 全树重扫节流
 const REFRESH_TTL_MS = 3000;
 
