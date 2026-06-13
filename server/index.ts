@@ -63,7 +63,18 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(compression());
+// Exclude the SSE stream from compression: gzip buffering holds text/event-stream
+// data, so browsers (which send Accept-Encoding: gzip) never receive the initial
+// "connected" event and the EventSource hangs in CONNECTING — live updates die.
+// curl -N appears to work only because it doesn't request gzip.
+// 把 SSE 流排除出 compression：gzip 会缓冲 text/event-stream，浏览器(发 gzip)收不到
+// 初始事件、EventSource 卡在 CONNECTING，实时更新全失效(curl -N 不要 gzip 才"正常")。
+app.use(compression({
+  filter: (req, res) => {
+    if (req.path === '/api/v1/events') return false;
+    return compression.filter(req, res);
+  },
+}));
 app.use(express.json({ limit: '1mb' }));
 
 // Global rate limit: 200 requests per minute / 全局速率限制：每分钟 200 请求

@@ -25,3 +25,6 @@ release/
 /test-results/
 /tests/fixtures/home/
 /tests/fixtures/.auth/
+
+# Playwright MCP snapshots
+.playwright-mcp/

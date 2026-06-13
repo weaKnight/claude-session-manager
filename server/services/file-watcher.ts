@@ -92,26 +92,36 @@ async function handleCodexChange(eventType: string, filePath: string): Promise<v
   logger.debug(`Codex file ${eventType}: ${sessionId}`);
   invalidateCodexFile(filePath);
 
-  // Apply incremental delta to the search index / 增量更新搜索索引
   if (eventType === 'remove') {
+    // File is gone — can't resolve its project; the client refreshes the whole
+    // project list on a remove event regardless of projectId.
+    // 文件已删，无法解析其项目；客户端对 remove 事件会整体刷新项目列表。
     onCodexFileEvent('unlink', filePath).catch((err) => {
       logger.debug(`search onCodexFileEvent error: ${err}`);
     });
-  } else {
-    // Resolve meta from the codex index; fall back to parsing the file directly.
-    // 优先从 codex 索引取 meta，取不到则直接解析文件。
-    (async () => {
-      let meta = await getCodexSessionMeta(sessionId);
-      if (!meta) meta = (await parseCodexSessionMeta(filePath)).meta;
-      await onCodexFileEvent(eventType as 'add' | 'change', filePath, meta);
-    })().catch((err) => {
-      logger.debug(`search onCodexFileEvent error: ${err}`);
-    });
+    broadcast({ type: eventType, source: 'codex', sessionId, timestamp: new Date().toISOString() });
+    return;
+  }
+
+  // add/change: resolve meta (codex index, else parse), apply search delta, and
+  // broadcast WITH projectId (= encoded cwd) so the client can target the right
+  // project's session-list refresh — Codex events otherwise lack a projectId.
+  // add/change：解析 meta 后做搜索增量，并带上 projectId(编码 cwd)广播，
+  // 使客户端能定向刷新对应项目的会话列表(否则 Codex 事件缺 projectId)。
+  let projectId: string | undefined;
+  try {
+    let meta = await getCodexSessionMeta(sessionId);
+    if (!meta) meta = (await parseCodexSessionMeta(filePath)).meta;
+    projectId = meta.projectPath;
+    await onCodexFileEvent(eventType as 'add' | 'change', filePath, meta);
+  } catch (err) {
+    logger.debug(`codex handleChange error: ${err}`);
   }
 
   broadcast({
     type: eventType,
     source: 'codex',
+    projectId,
     sessionId,
     timestamp: new Date().toISOString(),
   });
