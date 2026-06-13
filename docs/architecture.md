@@ -107,6 +107,25 @@ Lifecycle:
 Indexed text is capped at 50 000 chars per session; fields are boosted
 (`summary ×2`, `projectName ×1.5`) with fuzzy + prefix matching.
 
+### 3.4 Codex index — `server/services/codex-index.ts`
+
+Codex has no project directories and stores the working dir *inside* each file's
+`session_meta` line, so we cannot group sessions before parsing. The index parses
+every Codex file's meta once into a single `cache/meta/codex-index.json`
+(keyed by absolute path + `mtimeMs` + `size` + `SCHEMA_VERSION`) and derives two
+in-memory maps: `cwd → sessions` (for the project view) and `sessionId → filePath`
+(for resolution). `listCodexProjects` / `listCodexSessions` / `resolveCodexPath` /
+`listCodexFilesSnapshot` feed the session manager and search engine.
+
+- **Why a separate cache** — the per-project meta cache (§3.1) can't be keyed before
+  the cwd is known; the Codex index solves the chicken-and-egg by scanning first.
+- **Offset sidecars reused** — pagination anchors (§3.2) are stored under the same
+  `{projectId}__{sessionId}` key (projectId = encoded cwd), so seek-based paging works
+  identically for Codex.
+- **SCHEMA_VERSION** — bump it whenever `SessionMeta` content changes; otherwise
+  unchanged files keep serving stale meta (this caused the "Codex tokens show 0" bug;
+  see §12).
+
 ## 4. Sliced pagination & the API contract
 
 Three read paths coexist (see `server/routes/sessions.ts`):
@@ -167,11 +186,14 @@ sanitized-Markdown HTML can be reasoned about in isolation.
 ```
 ~/.claude-session-manager/
 ├── auth.json                       # bcrypt hash + JWT secret
-├── trash/{proj}__{sess}__{ts}.jsonl
+├── trash/
+│   ├── {proj}__{sess}__{ts}.jsonl  # deleted sessions (both sources)
+│   └── .trash-meta.json            # source + originalPath per trash item (restore)
 └── cache/
-    ├── meta/{projectId}.json                 # §3.1
-    ├── offsets/{projectId}__{sessionId}.json # §3.2
-    └── search/{index.json, manifest.json}    # §3.3
+    ├── meta/{projectId}.json                 # §3.1  Claude meta cache
+    ├── meta/codex-index.json                 # Codex: cwd grouping + id→path (keyed by abs-path+mtime+size)
+    ├── offsets/{projectId}__{sessionId}.json # §3.2  (both sources)
+    └── search/{index.json, manifest.json}    # §3.3  (Claude + Codex)
 ```
 
 `cache-paths.ts` is the single source of truth for these paths; `ensureCacheDirs`
@@ -208,4 +230,45 @@ When changing this area, keep these true (they are load-bearing):
    project, to avoid cache stampedes.
 6. **Atomic writes.** All cache persistence uses `writeFile(tmp)` + `rename`.
 7. **Path-traversal guard.** All project/session IDs pass `^[A-Za-z0-9_.-]+$`
-   (`isValidId`) before touching the filesystem.
+   (`isValidId`) before touching the filesystem. Trash restore additionally
+   resolves the destination and asserts it is under a whitelisted root
+   (`~/.codex/sessions` or `~/.claude/projects`) — never trust the sidecar's
+   `originalPath` blindly.
+8. **Source-agnostic downstream.** Routes and React components must not branch on
+   source; `locateSession()` + `SessionMeta.source` are the only places that know
+   Claude vs Codex. New read paths should go through `locateSession`.
+9. **SSE must bypass compression.** `text/event-stream` is excluded from the
+   `compression()` middleware — gzip buffering otherwise stalls EventSource and
+   kills all live updates (see Operations / Gotchas).
+
+## 11. Operations (production) / 运维
+
+Production runs under **PM2** as app `csm` (`PM2_HOME=/root/.pm2`), executing
+`dist/server/index.js`, logging to `logs/csm-{out,error}.log` (NOT /tmp).
+
+- **Deploy a change:** `npm run build` then `pm2 restart csm`. A running PM2
+  process holds the old `dist` in memory — rebuilding alone changes nothing until
+  restart. Never `nohup npm start` — it fights PM2 for port 3727 (EADDRINUSE) and
+  spawns zombie instances.
+- **Health:** `pm2 list` (a fast-climbing ↺ restart count = crash loop); `pm2 logs csm`.
+
+## 12. Gotchas log / 踩坑记录
+
+Hard-won traps from building the Codex integration — read before touching these areas:
+
+1. **Stale cache after a meta-shape change.** Adding token usage to `SessionMeta`
+   did nothing in prod until `codex-index`'s `SCHEMA_VERSION` was bumped 1→2:
+   unchanged source files (same mtime/size) kept serving pre-feature `totalTokens:0`.
+   Bump the cache's `SCHEMA_VERSION` whenever you change what it stores.
+2. **SSE killed by gzip.** `compression()` buffered `text/event-stream`, so browsers
+   (which send `Accept-Encoding: gzip`) never received events — UI showed OFFLINE and
+   nothing live-updated (e.g. sidebar counts stale after delete). `curl -N` masked it
+   (no gzip). Fix: `compression({ filter })` skips `/api/v1/events`.
+3. **`token_count.info` is usually populated.** An early too-small sample suggested it
+   was "often null" and tokens were abandoned as unreliable — wrong. The last
+   `token_count.info.total_token_usage` is the session's cumulative usage.
+4. **Killing a tsx server.** `pkill -f 'tsx server/index.ts'` does NOT match the real
+   process (tsx's child is `node --require .../tsx/preflight.cjs --import ...`). Kill by
+   PID via `ss -ltnp | grep ':<port>'`. Survivors cause EADDRINUSE and silent old-code.
+5. **Verify pushes against the remote.** Trust `git ls-remote origin refs/heads/master`
+   vs local HEAD, not a push command's printed "success" line.
