@@ -11,6 +11,7 @@ interface SSEEvent {
   type: 'add' | 'change' | 'remove' | 'connected';
   projectId?: string;
   sessionId?: string;
+  source?: 'claude' | 'codex'; // present on Codex file events / Codex 文件事件携带
   timestamp: string;
 }
 

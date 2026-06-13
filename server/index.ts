@@ -23,6 +23,7 @@ import { requireAuth } from './auth/middleware.js';
 import { isSetupRequired } from './auth/service.js';
 import { startWatcher, addSSEClient } from './services/file-watcher.js';
 import { buildIndex, loadIndex, reconcile, persistIndex } from './services/search-engine.js';
+import { codexEnabled, refreshCodexIndex } from './services/codex-index.js';
 
 import authRoutes from './routes/auth.js';
 import sessionRoutes from './routes/sessions.js';
@@ -150,6 +151,15 @@ async function start(): Promise<void> {
   // Start file watcher / 启动文件监控
   if (config.enableSSE) {
     startWatcher();
+  }
+
+  // Warm the Codex session index in the background so the first /projects call
+  // is fast and byte-offset sidecars are pre-built. Failures are non-fatal.
+  // 后台预热 Codex 会话索引：加速首次加载并预生成偏移 sidecar，失败不致命
+  if (codexEnabled()) {
+    refreshCodexIndex(true)
+      .then(() => logger.success(`Codex index ready: ${join(config.codexDir, 'sessions')}`))
+      .catch((err) => logger.warn(`Codex index warm-up failed: ${err}`));
   }
 
   // Search index: try to load from disk first; fall back to full build.

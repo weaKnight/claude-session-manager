@@ -49,6 +49,7 @@
     "deleted": "会话已删除",
     "view_commands": "查看命令",
     "agent_session": "子 Agent",
+    "codex_session": "Codex",
     "clean_invalid": "清理无效会话"
   },
   "chat": {

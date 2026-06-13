@@ -49,6 +49,7 @@
     "deleted": "Session deleted",
     "view_commands": "View Commands",
     "agent_session": "Sub-agent",
+    "codex_session": "Codex",
     "clean_invalid": "Clean Up"
   },
   "chat": {

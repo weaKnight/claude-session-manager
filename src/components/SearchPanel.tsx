@@ -6,7 +6,7 @@
 
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Clock, ArrowRight, Loader2 } from 'lucide-react';
+import { Search, Clock, ArrowRight, Loader2, Sparkles } from 'lucide-react';
 import { search as searchApi, type SearchResult } from '../utils/api';
 
 interface Props {
@@ -99,6 +99,12 @@ export default function SearchPanel({ onNavigate }: Props) {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
+                  {result.source === 'codex' && (
+                    <span className="badge mb-1.5" style={{ background: 'var(--accent-muted)', color: 'var(--accent)' }}>
+                      <Sparkles size={11} className="mr-1" />
+                      {t('sessions.codex_session')}
+                    </span>
+                  )}
                   <p className="text-[15px] font-semibold truncate group-hover:text-[color:var(--accent)] transition-colors" style={{ color: 'var(--txt-1)', letterSpacing: '-0.012em' }}>
                     {result.summary || result.sessionId}
                   </p>

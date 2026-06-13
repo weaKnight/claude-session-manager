@@ -11,12 +11,15 @@ import { config } from '../utils/config.js';
 import { logger } from '../utils/logger.js';
 import { invalidateSessionCache } from './session-manager.js';
 import { evictOffsets } from './offset-cache.js';
-import { onFileEvent } from './search-engine.js';
+import { onFileEvent, onCodexFileEvent } from './search-engine.js';
+import { codexEnabled, invalidateCodexFile, getCodexSessionMeta } from './codex-index.js';
+import { codexSessionIdFromFile, parseCodexSessionMeta } from '../parser/codex-reader.js';
 
 // SSE client connections / SSE 客户端连接
 const sseClients: Set<Response> = new Set();
 
 let watcher: chokidar.FSWatcher | null = null;
+let codexWatcher: chokidar.FSWatcher | null = null;
 
 /**
  * Start watching the projects directory / 开始监控项目目录
@@ -50,6 +53,68 @@ export function startWatcher(): void {
   });
 
   logger.success(`File watcher active: ${projectsDir}`);
+
+  // Also watch the Codex sessions date-tree when enabled / 同时监控 Codex 会话目录
+  if (codexEnabled()) {
+    const codexDir = join(config.codexDir, 'sessions');
+    codexWatcher = chokidar.watch(codexDir, {
+      persistent: true,
+      ignoreInitial: true,
+      // YYYY/MM/DD/rollout-*.jsonl → need deeper traversal than Claude's flat layout
+      depth: 4,
+      ignored: (path: string) => {
+        if (path === codexDir) return false;
+        return !path.endsWith('.jsonl') && !path.includes('/');
+      },
+      awaitWriteFinish: { stabilityThreshold: 500, pollInterval: 100 },
+    });
+
+    codexWatcher.on('add', (filePath: string) => { void handleCodexChange('add', filePath); });
+    codexWatcher.on('change', (filePath: string) => { void handleCodexChange('change', filePath); });
+    codexWatcher.on('unlink', (filePath: string) => { void handleCodexChange('remove', filePath); });
+    codexWatcher.on('error', (err: Error) => {
+      logger.error(`Codex watcher error: ${err.message}`);
+    });
+
+    logger.success(`Codex watcher active: ${codexDir}`);
+  }
+}
+
+/**
+ * Handle a Codex session file change. Invalidates the codex index so the next
+ * read re-parses, and broadcasts an SSE event tagged source=codex.
+ * 处理 Codex 会话文件变更：失效索引并通过 SSE 广播
+ */
+async function handleCodexChange(eventType: string, filePath: string): Promise<void> {
+  if (!filePath.endsWith('.jsonl')) return;
+  const sessionId = codexSessionIdFromFile(filePath);
+
+  logger.debug(`Codex file ${eventType}: ${sessionId}`);
+  invalidateCodexFile(filePath);
+
+  // Apply incremental delta to the search index / 增量更新搜索索引
+  if (eventType === 'remove') {
+    onCodexFileEvent('unlink', filePath).catch((err) => {
+      logger.debug(`search onCodexFileEvent error: ${err}`);
+    });
+  } else {
+    // Resolve meta from the codex index; fall back to parsing the file directly.
+    // 优先从 codex 索引取 meta，取不到则直接解析文件。
+    (async () => {
+      let meta = await getCodexSessionMeta(sessionId);
+      if (!meta) meta = (await parseCodexSessionMeta(filePath)).meta;
+      await onCodexFileEvent(eventType as 'add' | 'change', filePath, meta);
+    })().catch((err) => {
+      logger.debug(`search onCodexFileEvent error: ${err}`);
+    });
+  }
+
+  broadcast({
+    type: eventType,
+    source: 'codex',
+    sessionId,
+    timestamp: new Date().toISOString(),
+  });
 }
 
 /**
@@ -144,5 +209,7 @@ export function addSSEClient(res: Response): void {
 export function stopWatcher(): void {
   watcher?.close();
   watcher = null;
+  codexWatcher?.close();
+  codexWatcher = null;
   sseClients.clear();
 }

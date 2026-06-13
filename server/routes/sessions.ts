@@ -81,13 +81,13 @@ router.post('/projects/:projectId/sessions/scan-invalid', async (req, res) => {
 
 // POST /api/v1/projects/:projectId/sessions/batch-delete - Batch soft/hard delete
 // 批量软/硬删除会话
-router.post('/projects/:projectId/sessions/batch-delete', (req, res) => {
+router.post('/projects/:projectId/sessions/batch-delete', async (req, res) => {
   const body = (req.body ?? {}) as { sessionIds?: unknown; force?: unknown };
   if (!Array.isArray(body.sessionIds)) {
     res.status(400).json({ error: 'sessionIds must be an array / sessionIds 必须为数组' });
     return;
   }
-  const result = batchDeleteSessions(
+  const result = await batchDeleteSessions(
     req.params.projectId,
     body.sessionIds as string[],
     body.force === true,
@@ -104,7 +104,7 @@ router.get('/sessions/:projectId/:sessionId', async (req, res) => {
 
     // ETag short-circuit / ETag 304 短路
     try {
-      const { mtimeMs, size } = getSessionStat(projectId, sessionId);
+      const { mtimeMs, size } = await getSessionStat(projectId, sessionId);
       const etag = etagFor(mtimeMs, size, 'page');
       if (handleConditional(req, res, etag, mtimeMs)) return;
     } catch { /* let main handler raise */ }
@@ -155,7 +155,7 @@ router.get('/sessions/:projectId/:sessionId/commands', async (req, res) => {
     const { projectId, sessionId } = req.params;
 
     try {
-      const { mtimeMs, size } = getSessionStat(projectId, sessionId);
+      const { mtimeMs, size } = await getSessionStat(projectId, sessionId);
       const etag = etagFor(mtimeMs, size, 'cmd');
       if (handleConditional(req, res, etag, mtimeMs)) return;
     } catch { /* fall through */ }
@@ -169,13 +169,13 @@ router.get('/sessions/:projectId/:sessionId/commands', async (req, res) => {
 });
 
 // DELETE /api/v1/sessions/:projectId/:sessionId - Soft delete / 软删除
-router.delete('/sessions/:projectId/:sessionId', (req, res) => {
+router.delete('/sessions/:projectId/:sessionId', async (req, res) => {
   const { force } = req.query;
   const { projectId, sessionId } = req.params;
 
   const result = force === 'true'
-    ? hardDeleteSession(projectId, sessionId)
-    : softDeleteSession(projectId, sessionId);
+    ? await hardDeleteSession(projectId, sessionId)
+    : await softDeleteSession(projectId, sessionId);
 
   if (result.success) {
     res.json({ success: true, method: force === 'true' ? 'hard' : 'soft' });
@@ -185,9 +185,9 @@ router.delete('/sessions/:projectId/:sessionId', (req, res) => {
 });
 
 // GET /api/v1/trash - List trash items / 列出回收站条目
-router.get('/trash', (_req, res) => {
+router.get('/trash', async (_req, res) => {
   try {
-    const items = listTrash();
+    const items = await listTrash();
     res.json({ items });
   } catch (err) {
     res.status(500).json({ error: `Failed to list trash: ${err}` });
@@ -195,13 +195,13 @@ router.get('/trash', (_req, res) => {
 });
 
 // POST /api/v1/trash/restore - Restore from trash / 从回收站恢复
-router.post('/trash/restore', (req, res) => {
+router.post('/trash/restore', async (req, res) => {
   const { fileName } = req.body as { fileName?: string };
   if (!fileName) {
     res.status(400).json({ error: 'fileName is required / 缺少 fileName 参数' });
     return;
   }
-  const result = restoreSession(fileName);
+  const result = await restoreSession(fileName);
   if (result.success) {
     res.json({ success: true });
   } else {
@@ -211,19 +211,19 @@ router.post('/trash/restore', (req, res) => {
 
 // POST /api/v1/trash/batch-delete - Permanently delete specific trash items
 // 批量永久删除指定回收站条目
-router.post('/trash/batch-delete', (req, res) => {
+router.post('/trash/batch-delete', async (req, res) => {
   const body = (req.body ?? {}) as { fileNames?: unknown };
   if (!Array.isArray(body.fileNames)) {
     res.status(400).json({ error: 'fileNames must be an array / fileNames 必须为数组' });
     return;
   }
-  const result = deleteTrashItems(body.fileNames as string[]);
+  const result = await deleteTrashItems(body.fileNames as string[]);
   res.json(result);
 });
 
 // DELETE /api/v1/trash - Empty trash / 清空回收站
-router.delete('/trash', (_req, res) => {
-  const result = emptyTrash();
+router.delete('/trash', async (_req, res) => {
+  const result = await emptyTrash();
   if (result.success) {
     res.json({ success: true, deleted: result.deleted });
   } else {

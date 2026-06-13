@@ -40,14 +40,17 @@ Sub-agent sessions are named `agent-{shortId}.jsonl`.
 server/index.ts                    — Express entry + bootstrap (ensureCacheDirs → watcher → loadIndex/buildIndex → reconcile; persistIndex on shutdown)
 server/auth/service.ts             — bcrypt + JWT logic; rotates JWT secret on password change
 server/auth/middleware.ts          — requireAuth middleware
-server/parser/jsonl-reader.ts      — JSONL parser: full parse, sliced parse (seek-by-byte), meta-only parse + offset anchors, command extraction
-server/parser/message-types.ts     — TypeScript type definitions
-server/services/session-manager.ts — Project/session CRUD, sliced pagination, trash, invalid-session scan + batch delete, cache invalidation
+server/parser/jsonl-reader.ts      — Claude JSONL parser: full parse, sliced parse (seek-by-byte), meta-only parse + offset anchors, command extraction
+server/parser/codex-reader.ts      — Codex JSONL parser: maps ~/.codex/sessions/ rollout-*.jsonl ({timestamp,type,payload} envelope) onto the same ParsedSession/ContentBlock models; cwd→project encoding, synthetic c-N uuids, token usage from event_msg token_count.total_token_usage, streaming search-text extraction
+server/parser/message-types.ts     — TypeScript type definitions (SessionMeta.source: 'claude'|'codex')
+server/services/session-manager.ts — Project/session CRUD (source-aware: locateSession resolves Claude vs Codex), sliced pagination, trash (Codex restore via sidecar + path-traversal whitelist), invalid-session scan + batch delete, cache invalidation
+server/services/codex-index.ts     — Scans the Codex date-tree, parses meta, groups sessions by encoded cwd into projects; own mtime-keyed cache (cache/meta/codex-index.json) + sessionId→filePath resolution + listCodexFilesSnapshot for search
+server/services/trash-meta.ts      — Trash sidecar (trash/.trash-meta.json): records source + originalPath per deleted session so Codex sessions restore to their date-tree path; atomic writes
 server/services/invalid-detector.ts — Pure classifier: flags sessions as empty/too_short/no_user_input/corrupt per criteria
 server/services/meta-cache.ts      — Persistent per-project session metadata cache (cache/meta/{projectId}.json, keyed by mtime+size)
 server/services/offset-cache.ts    — Byte-offset sidecars for seek-based pagination (cache/offsets/, anchors every 100 msgs)
-server/services/search-engine.ts   — MiniSearch index: load/build/reconcile + incremental updates + debounced persist (cache/search/)
-server/services/file-watcher.ts    — chokidar → cache invalidation + search delta + SSE broadcast
+server/services/search-engine.ts   — MiniSearch index over Claude + Codex sessions (doc.source tags origin): load/build/reconcile + incremental updates (onFileEvent / onCodexFileEvent) + debounced persist (cache/search/)
+server/services/file-watcher.ts    — chokidar (Claude projects + Codex sessions tree) → cache invalidation + search delta + SSE broadcast
 server/utils/config.ts             — Env/CLI config, paths, client-dist resolution (Node + Bun single-binary)
 server/utils/cache-paths.ts        — Centralized cache/ directory layout under appDataDir
 server/utils/etag.ts               — Weak ETag / 304 conditional-request helpers (derived from mtime+size)

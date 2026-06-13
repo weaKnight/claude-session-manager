@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Trash2, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Trash2, RotateCcw, AlertTriangle, Sparkles } from 'lucide-react';
 import { trash as trashApi, type TrashItem } from '../utils/api';
 
 export default function TrashPanel() {
@@ -189,6 +189,12 @@ export default function TrashPanel() {
                     {item.sessionId}
                   </p>
                   <div className="flex items-center gap-3 mt-2 text-[12px] font-medium" style={{ color: 'var(--txt-3)' }}>
+                    {item.source === 'codex' && (
+                      <span className="badge" style={{ background: 'var(--accent-muted)', color: 'var(--accent)' }}>
+                        <Sparkles size={11} className="mr-1" />
+                        {t('sessions.codex_session')}
+                      </span>
+                    )}
                     <span className="font-semibold" style={{ color: 'var(--txt-2)' }}>{item.projectId}</span>
                     <span>{formatDeletedAt(item.deletedAt)}</span>
                     <span className="px-2 py-0.5 rounded font-bold" style={{ background: 'var(--surface-2)', color: 'var(--txt-2)', fontFamily: 'JetBrains Mono, monospace' }}>{formatSize(item.fileSize)}</span>

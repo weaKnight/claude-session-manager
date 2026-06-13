@@ -92,8 +92,17 @@ export type JsonlEntry = UserEntry | AssistantEntry | SummaryEntry | SystemEntry
 
 // --- Parsed session / 解析后的会话 ---
 
+/**
+ * Origin of a session/project. Claude lives under ~/.claude/projects/,
+ * Codex under ~/.codex/sessions/ — the two share the same view models but
+ * different on-disk layouts.
+ * 会话/项目来源：claude 来自 ~/.claude/projects/，codex 来自 ~/.codex/sessions/
+ */
+export type SessionSource = 'claude' | 'codex';
+
 export interface SessionMeta {
   id: string;               // Session UUID / 会话 UUID
+  source?: SessionSource;    // Origin of the session (defaults to claude) / 会话来源（默认 claude）
   projectPath: string;       // Encoded project path / 编码后的项目路径
   projectName: string;       // Decoded human-readable name / 解码后的可读名称
   filePath: string;          // Absolute path to .jsonl file / JSONL 文件绝对路径
@@ -147,4 +156,7 @@ export interface ProjectInfo {
   displayName: string;       // Short name for UI / UI 显示用短名称
   sessionCount: number;      // Number of sessions / 会话数量
   lastActivity: string;      // Most recent session time / 最近会话时间
+  // Which source(s) contribute sessions to this project / 该项目会话的来源
+  // 'claude' | 'codex' | 'both' —— 按 cwd 合成时同一项目可能两者皆有
+  sources?: SessionSource[];
 }

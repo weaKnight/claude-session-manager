@@ -26,6 +26,10 @@ export const cachePaths = {
     join(OFFSETS_DIR, `${projectId}__${sessionId}.json`),
   searchIndexFile: (): string => join(SEARCH_DIR, 'index.json'),
   searchManifestFile: (): string => join(SEARCH_DIR, 'manifest.json'),
+  // Codex session meta cache — keyed by absolute file path (cwd lives inside
+  // the file, so we cannot group by project before parsing).
+  // Codex 会话元数据缓存，按绝对路径键入（cwd 在文件内部，解析前无法按项目分组）
+  codexIndexFile: (): string => join(META_DIR, 'codex-index.json'),
 } as const;
 
 /**

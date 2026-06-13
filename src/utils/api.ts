@@ -133,16 +133,23 @@ export const auth = {
 
 // --- Projects API / 项目接口 ---
 
+// Session/project origin / 会话与项目来源
+export type SessionSource = 'claude' | 'codex';
+
 export interface ProjectInfo {
   encodedPath: string;
   decodedPath: string;
   displayName: string;
   sessionCount: number;
   lastActivity: string;
+  // Which source(s) contribute sessions / 该项目会话的来源
+  sources?: SessionSource[];
 }
 
 export interface SessionMeta {
   id: string;
+  // Origin of the session; absent means Claude / 会话来源，缺省视为 claude
+  source?: SessionSource;
   projectPath: string;
   projectName: string;
   filePath: string;
@@ -222,6 +229,8 @@ export interface SearchResult {
   timestamp: string;
   score: number;
   matchSnippet: string;
+  // Origin of the session; absent means Claude / 会话来源，缺省视为 claude
+  source?: SessionSource;
 }
 
 export const projects = {
@@ -324,6 +333,8 @@ export interface TrashItem {
   sessionId: string;
   deletedAt: number;
   fileSize: number;
+  // Origin of the deleted session; absent means Claude / 来源，缺省视为 claude
+  source?: 'claude' | 'codex';
 }
 
 export const trash = {

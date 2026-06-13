@@ -5,7 +5,7 @@
  */
 
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, GitBranch, Clock, Bot, Trash2, Eraser } from 'lucide-react';
+import { MessageSquare, GitBranch, Clock, Bot, Trash2, Eraser, Sparkles } from 'lucide-react';
 import type { SessionMeta } from '../utils/api';
 import { sessions as sessionsApi } from '../utils/api';
 import { memo, useMemo, useState } from 'react';
@@ -67,6 +67,12 @@ const SessionRow = memo(function SessionRow({ session, projectId, maxTokens, del
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
+            {session.source === 'codex' && (
+              <span className="badge" style={{ background: 'var(--accent-muted)', color: 'var(--accent)' }}>
+                <Sparkles size={11} className="mr-1" />
+                {t('sessions.codex_session')}
+              </span>
+            )}
             {session.isAgent && (
               <span className="badge badge-tool">
                 <Bot size={11} className="mr-1" />
@@ -111,6 +117,7 @@ const SessionRow = memo(function SessionRow({ session, projectId, maxTokens, del
           </div>
         </div>
 
+        {/* Both Claude and Codex sessions are deletable / Claude 与 Codex 会话均可删除 */}
         <button
           onClick={(e) => onDelete(e, session.id)}
           className="btn btn-ghost !p-2.5 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity"

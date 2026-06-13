@@ -50,6 +50,10 @@ function resolveClientDistPath(): string {
 // Default Claude data directory / 默认 Claude 数据目录
 const defaultClaudeDir = join(homedir(), '.claude');
 
+// Default Codex data directory / 默认 Codex 数据目录
+// Codex CLI 把会话存放在 ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl
+const defaultCodexDir = join(homedir(), '.codex');
+
 // App data directory (separate from .claude to avoid pollution)
 // 应用数据目录（与 .claude 分离，避免污染）
 const appDataDir = join(homedir(), '.claude-session-manager');
@@ -64,6 +68,8 @@ export const config = {
 
   // Paths / 路径
   claudeDir: cliArgs['claude-dir'] || process.env['CSM_CLAUDE_DIR'] || defaultClaudeDir,
+  // Codex 会话目录；设为空字符串可关闭 Codex 识别
+  codexDir: cliArgs['codex-dir'] || process.env['CSM_CODEX_DIR'] || defaultCodexDir,
   appDataDir,
   authFile: join(appDataDir, 'auth.json'),
   trashDir: join(appDataDir, 'trash'),
